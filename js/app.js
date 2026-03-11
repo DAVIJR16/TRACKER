@@ -1148,16 +1148,23 @@ function formatTime(dateString) {
     minute: "2-digit"
   });
 }
-// ===== SIDEBAR TOGGLE =====
+// ===== SIDEBAR TOGGLE MELHORADO =====
 
 window.toggleSidebar = function() {
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebarOverlay");
   const toggle = document.getElementById("sidebarToggle");
   
-  sidebar.classList.toggle("open");
-  overlay.classList.toggle("show");
-  toggle.classList.toggle("open");
+  const isOpen = sidebar.classList.contains("open");
+  
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sidebar.classList.add("open");
+    overlay.classList.add("show");
+    toggle.classList.add("open");
+    document.body.style.overflow = "hidden";
+  }
 };
 
 window.closeSidebar = function() {
@@ -1168,7 +1175,57 @@ window.closeSidebar = function() {
   sidebar.classList.remove("open");
   overlay.classList.remove("show");
   toggle.classList.remove("open");
+  document.body.style.overflow = "auto";
 };
+
+// Fechar sidebar ao clicar em um botão de navegação
+window.showSection = function(sectionId, event) {
+  if (event) {
+    event.preventDefault();
+  }
+  
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(sectionId).classList.add('active');
+  
+  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+  if (event && event.target) {
+    event.target.classList.add('active');
+  }
+
+  if (sectionId === 'chat') {
+    loadConversations();
+  }
+
+  if (sectionId === 'tournaments') {
+    loadTournaments();
+  }
+
+  // Fechar sidebar em mobile após clicar
+  const sidebar = document.getElementById("sidebar");
+  if (window.innerWidth <= 768 && sidebar.classList.contains("open")) {
+    closeSidebar();
+  }
+};
+
+// Carregar torneios quando carrega ligas
+async function loadLeagues() {
+  try {
+    const querySnapshot = await getDocs(
+      query(collection(db, "leagues"), orderBy("name"))
+    );
+    leagues = [];
+    querySnapshot.forEach((docSnapshot) => {
+      leagues.push({ id: docSnapshot.id, ...docSnapshot.data() });
+    });
+    loadTeams();
+    updateLeagueSelects();
+    updateTournamentSelects(); // Adicionar isto
+    updateLeaguesList();
+    updateDashboard();
+  } catch (error) {
+    showError("Erro ao carregar ligas: " + error.message);
+  }
+}
 
 // Fechar sidebar ao clicar em um botão de navegação
 window.showSection = function(sectionId, event) {
@@ -1190,4 +1247,306 @@ window.showSection = function(sectionId, event) {
 
   // Fechar sidebar em mobile após clicar
   closeSidebar();
+};
+
+// ===== TORNEIOS =====
+
+let tournaments = [];
+
+async function loadTournaments() {
+  try {
+    const querySnapshot = await getDocs(
+      query(collection(db, "tournaments"), orderBy("createdAt", "desc"))
+    );
+    tournaments = [];
+    querySnapshot.forEach((docSnapshot) => {
+      tournaments.push({ id: docSnapshot.id, ...docSnapshot.data() });
+    });
+    updateTournamentsUI();
+  } catch (error) {
+    console.error("Erro ao carregar torneios:", error);
+  }
+}
+
+function updateTournamentSelects() {
+  const select = document.getElementById("tournamentLeague");
+  if (select) {
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Selecione uma Liga</option>';
+    leagues.forEach(league => {
+      select.innerHTML += `<option value="${league.id}">${league.name}</option>`;
+    });
+    select.value = currentValue;
+  }
+}
+
+window.createTournament = async function() {
+  try {
+    const name = document.getElementById("tournamentName").value.trim();
+    const leagueId = document.getElementById("tournamentLeague").value;
+    const format = document.getElementById("tournamentFormat").value;
+    const system = document.getElementById("tournamentSystem").value;
+    const teamsCount = parseInt(document.getElementById("tournamentTeamsCount").value) || 4;
+    const description = document.getElementById("tournamentDescription").value.trim();
+
+    if (!name) {
+      showError("Digite o nome do torneio!");
+      return;
+    }
+
+    if (name.length < 3) {
+      showError("Nome do torneio deve ter pelo menos 3 caracteres!");
+      return;
+    }
+
+    if (!leagueId) {
+      showError("Selecione uma liga!");
+      return;
+    }
+
+    if (teamsCount < 2 || teamsCount > 32) {
+      showError("Quantidade de times deve ser entre 2 e 32!");
+      return;
+    }
+
+    const tournamentExists = tournaments.some(
+      t => t.name.toLowerCase() === name.toLowerCase() && t.status === "pending"
+    );
+
+    if (tournamentExists) {
+      showError("Já existe um torneio com este nome!");
+      return;
+    }
+
+    const league = leagues.find(l => l.id === leagueId);
+
+    await addDoc(collection(db, "tournaments"), {
+      name,
+      leagueId,
+      leagueName: league.name,
+      format,
+      system,
+      teamsCount,
+      description,
+      status: "pending",
+      selectedTeams: [],
+      brackets: [],
+      winner: null,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.uid
+    });
+
+    document.getElementById("tournamentName").value = "";
+    document.getElementById("tournamentLeague").value = "";
+    document.getElementById("tournamentFormat").value = "single";
+    document.getElementById("tournamentSystem").value = "single";
+    document.getElementById("tournamentTeamsCount").value = "4";
+    document.getElementById("tournamentDescription").value = "";
+
+    showToast("🏅 Torneio criado com sucesso!");
+    loadTournaments();
+  } catch (error) {
+    showError("Erro ao criar torneio: " + error.message);
+  }
+};
+
+window.deleteTournament = async function(tournamentId) {
+  if (!confirm("Deseja realmente deletar este torneio?")) return;
+
+  try {
+    await deleteDoc(doc(db, "tournaments", tournamentId));
+    showToast("🗑️ Torneio deletado!");
+    loadTournaments();
+  } catch (error) {
+    showError("Erro ao deletar torneio: " + error.message);
+  }
+};
+
+window.openDrawModal = async function(tournamentId) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    const leagueTeams = teams.filter(t => t.leagueId === tournament.leagueId);
+
+    if (leagueTeams.length < tournament.teamsCount) {
+      showError(`Esta liga não tem ${tournament.teamsCount} times!`);
+      return;
+    }
+
+    currentModalUserId = tournamentId; // Reutilizando variável global
+
+    const modal = document.getElementById("userProfileModal");
+    const modalContent = modal.querySelector(".modal-content");
+
+    // Criar conteúdo modal customizado para sorteio
+    const drawHtml = `
+      <button class="modal-close" onclick="closeDrawModal()">✕</button>
+      <h2 style="text-align: center; margin-bottom: 20px; color: var(--accent);">🎲 Sorteio: ${tournament.name}</h2>
+      
+      <div class="draw-teams-container" id="drawTeamsContainer">
+        ${leagueTeams.slice(0, tournament.teamsCount).map(team => `
+          <div class="draw-team-item" data-team-id="${team.id}">
+            <h4>⚽ ${team.name}</h4>
+            <p>${team.leagueName}</p>
+          </div>
+        `).join('')}
+      </div>
+
+      <button class="draw-spin-button" onclick="performDraw('${tournamentId}', ${tournament.teamsCount})">
+        🎯 REALIZAR SORTEIO
+      </button>
+
+      <div id="drawResults" class="draw-results" style="display: none;"></div>
+    `;
+
+    modalContent.innerHTML = drawHtml;
+    modal.style.display = "flex";
+  } catch (error) {
+    showError("Erro ao abrir sorteio: " + error.message);
+  }
+};
+
+window.performDraw = async function(tournamentId, teamsCount) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    const leagueTeams = teams.filter(t => t.leagueId === tournament.leagueId);
+    
+    // Embaralhar times
+    const shuffled = [...leagueTeams.slice(0, teamsCount)].sort(() => Math.random() - 0.5);
+    
+    // Criar brackts ou grupos
+    const brackets = [];
+    if (tournament.format === "single" || tournament.format === "double") {
+      // Eliminatória
+      for (let i = 0; i < shuffled.length; i += 2) {
+        if (i + 1 < shuffled.length) {
+          brackets.push({
+            team1: shuffled[i],
+            team2: shuffled[i + 1],
+            round: 1,
+            result: null
+          });
+        }
+      }
+    } else if (tournament.format === "roundrobin") {
+      // Todos x Todos
+      for (let i = 0; i < shuffled.length; i++) {
+        for (let j = i + 1; j < shuffled.length; j++) {
+          brackets.push({
+            team1: shuffled[i],
+            team2: shuffled[j],
+            round: 1,
+            result: null,
+            played: false
+          });
+        }
+      }
+    }
+
+    // Atualizar banco de dados
+    await updateDoc(doc(db, "tournaments", tournamentId), {
+      selectedTeams: shuffled.map(t => t.id),
+      brackets: brackets,
+      status: "in_progress"
+    });
+
+    showToast("🎲 Sorteio realizado com sucesso!");
+    loadTournaments();
+    closeDrawModal();
+  } catch (error) {
+    showError("Erro ao realizar sorteio: " + error.message);
+  }
+};
+
+window.closeDrawModal = function() {
+  document.getElementById("userProfileModal").style.display = "none";
+  currentModalUserId = null;
+};
+
+function updateTournamentsUI() {
+  const list = document.getElementById("tournamentsList");
+
+  if (tournaments.length === 0) {
+    list.innerHTML = '<p class="empty-state">Nenhum torneio criado ainda</p>';
+    return;
+  }
+
+  list.innerHTML = tournaments.map(tournament => {
+    const statusText = {
+      "pending": "⏳ Pendente",
+      "in_progress": "🎮 Em Andamento",
+      "finished": "✅ Finalizado"
+    };
+
+    const formatText = {
+      "single": "Eliminatória Simples",
+      "double": "Eliminatória Dupla",
+      "roundrobin": "Todos x Todos"
+    };
+
+    const systemText = {
+      "single": "Ida",
+      "double": "Ida e Volta"
+    };
+
+    return `
+      <div class="card tournament-card">
+        <div class="tournament-status ${tournament.status}">${statusText[tournament.status]}</div>
+        <h3>🏅 ${tournament.name}</h3>
+        
+        <div class="tournament-info">
+          <p>📍 <strong>Liga:</strong> ${tournament.leagueName}</p>
+          <p>📊 <strong>Formato:</strong> ${formatText[tournament.format]}</p>
+          <p>🔄 <strong>Sistema:</strong> ${systemText[tournament.system]}</p>
+          <p>👥 <strong>Times:</strong> ${tournament.selectedTeams?.length || 0}/${tournament.teamsCount}</p>
+          ${tournament.description ? `<p>📝 ${tournament.description}</p>` : ''}
+        </div>
+
+        <div class="tournament-actions">
+          ${tournament.status === "pending" ? `
+            <button onclick="openDrawModal('${tournament.id}')" class="btn-draw">🎲 Realizar Sorteio</button>
+          ` : ''}
+          <button onclick="viewTournamentBrackets('${tournament.id}')" class="btn-view">👁️ Ver Chaveamento</button>
+          <button onclick="deleteTournament('${tournament.id}')" class="btn-delete-tournament">🗑️ Deletar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+window.viewTournamentBrackets = async function(tournamentId) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    
+    if (!tournament.brackets || tournament.brackets.length === 0) {
+      showError("Este torneio não tem sorteio realizado ainda!");
+      return;
+    }
+
+    const modal = document.getElementById("userProfileModal");
+    const modalContent = modal.querySelector(".modal-content");
+
+    const bracketsHtml = `
+      <button class="modal-close" onclick="closeDrawModal()">✕</button>
+      <h2 style="text-align: center; margin-bottom: 20px; color: var(--accent);">🏆 Chaveamento: ${tournament.name}</h2>
+      
+      <div style="max-height: 500px; overflow-y: auto;">
+        ${tournament.brackets.map((bracket, index) => `
+          <div class="card" style="margin-bottom: 16px; padding: 16px;">
+            <p style="margin: 0; color: var(--accent); font-weight: 600; margin-bottom: 8px;">Rodada ${bracket.round} - Partida ${index + 1}</p>
+            <p style="margin: 8px 0; color: var(--text);">⚽ ${bracket.team1.name} <strong>vs</strong> ${bracket.team2.name}</p>
+            ${bracket.result ? `
+              <p style="margin: 8px 0; color: var(--success); font-weight: 600;">✅ Resultado: ${bracket.result}</p>
+            ` : `
+              <p style="margin: 8px 0; color: var(--text-secondary);">⏳ Pendente</p>
+            `}
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    modalContent.innerHTML = bracketsHtml;
+    modal.style.display = "flex";
+  } catch (error) {
+    showError("Erro ao carregar chaveamento: " + error.message);
+  }
 };

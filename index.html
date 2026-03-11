@@ -42,16 +42,40 @@
   <!-- Tela Principal -->
   <div id="appScreen" style="display:none;">
     <div class="app">
-      <!-- Botão Hamburger -->
-      <button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
+     <!-- Botão Hamburger -->
+<button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()">
+  <span></span>
+  <span></span>
+  <span></span>
+</button>
 
-      <!-- Overlay para fechar sidebar ao clicar fora -->
-      <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+<!-- Overlay para fechar sidebar ao clicar fora -->
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
+<!-- Sidebar -->
+<aside id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <h2>⚽ EAFC 26</h2>
+    <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
+  </div>
+  
+  <span id="userName" class="user-name">@usuário</span>
+  <span id="userEmail" class="user-email">email@example.com</span>
+  
+  <nav class="sidebar-nav">
+    <button class="nav-btn" onclick="showSection('dashboard', event)">🏠 Dashboard</button>
+    <button class="nav-btn" onclick="showSection('leagues', event)">🎯 Ligas</button>
+    <button class="nav-btn" onclick="showSection('teams', event)">👥 Times</button>
+    <button class="nav-btn" onclick="showSection('matches', event)">⚽ Partidas</button>
+    <button class="nav-btn" onclick="showSection('ranking', event)">🏆 Ranking</button>
+    <button class="nav-btn" onclick="showSection('tournaments', event)">🏅 Torneios</button>
+    <button class="nav-btn" onclick="showSection('users', event)">👤 Usuários</button>
+    <button class="nav-btn" onclick="showSection('chat', event)">💬 Chat</button>
+    <button class="nav-btn" onclick="showSection('profile', event)">⚙️ Perfil</button>
+  </nav>
+
+  <button onclick="logout()" class="btn-logout">Sair</button>
+</aside>
       <!-- Sidebar -->
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
@@ -136,40 +160,56 @@
         </section>
 
         <!-- Partidas -->
-        <section id="matches" class="section">
-          <h2>⚽ Registrar Partida</h2>
-          <div class="card form-card">
-            <select id="matchLeagueSelect">
-              <option value="">Selecione uma Liga</option>
-            </select>
-            <div class="match-form-grid">
-              <div>
-                <label>Time Casa</label>
-                <select id="homeTeam"></select>
-              </div>
-              <div>
-                <label>Gols Casa</label>
-                <input type="number" id="homeGoals" placeholder="0" min="0" max="20">
-              </div>
-              <div>
-                <label>Gols Fora</label>
-                <input type="number" id="awayGoals" placeholder="0" min="0" max="20">
-              </div>
-              <div>
-                <label>Time Visitante</label>
-                <select id="awayTeam"></select>
-              </div>
-            </div>
-            <button onclick="registerMatch()" class="btn-primary">📝 Registrar Partida</button>
-          </div>
-          <div id="matchesList" class="matches-list"></div>
-        </section>
+<section id="matches" class="section">
+  <h2>⚽ Registrar Partida</h2>
+  <div class="card form-card">
+    <select id="matchLeagueSelect">
+      <option value="">Selecione uma Liga</option>
+    </select>
+    <div class="match-form-grid">
+      <div>
+        <label>Time Casa</label>
+        <select id="homeTeam"></select>
+      </div>
+      <div>
+        <label>Gols Casa</label>
+        <input type="number" id="homeGoals" placeholder="0" min="0" max="20">
+      </div>
+      <div>
+        <label>Gols Fora</label>
+        <input type="number" id="awayGoals" placeholder="0" min="0" max="20">
+      </div>
+      <div>
+        <label>Time Visitante</label>
+        <select id="awayTeam"></select>
+      </div>
+    </div>
+    
+    <!-- Nova seção: Jogadores -->
+    <div class="match-players-grid">
+      <div>
+        <label>🎮 Jogador Casa (Você)</label>
+        <input type="text" id="homePlayerName" disabled placeholder="Seu nome">
+      </div>
+      <div>
+        <label>🎮 Jogador Visitante</label>
+        <select id="awayPlayerSelect">
+          <option value="">Selecione um jogador</option>
+        </select>
+      </div>
+    </div>
+    
+    <button onclick="registerMatch()" class="btn-primary">📝 Registrar Partida</button>
+  </div>
+  <div id="matchesList" class="matches-list"></div>
+</section>
 
         <!-- Ranking -->
         <section id="ranking" class="section">
           <h2>🏆 Ranking Geral</h2>
           <select id="rankingLeagueFilter">
             <option value="">Todas as Ligas</option>
+            <button class="nav-btn" onclick="showSection('tournaments', event)">🏅 Torneios</button>
           </select>
           <div id="rankingTable" class="ranking-table"></div>
         </section>
@@ -246,6 +286,51 @@
       </main>
     </div>
   </div>
+  <!-- Torneios -->
+<section id="tournaments" class="section">
+  <h2>🏅 Torneios</h2>
+  
+  <!-- Criar Torneio -->
+  <div class="card form-card">
+    <h3 style="margin-bottom: 20px; text-align: center;">➕ Criar Novo Torneio</h3>
+    <input type="text" id="tournamentName" placeholder="Nome do Torneio" maxlength="50">
+    <select id="tournamentLeague">
+      <option value="">Selecione uma Liga</option>
+    </select>
+    
+    <div class="tournament-config-grid">
+      <div>
+        <label>📊 Formato</label>
+        <select id="tournamentFormat">
+          <option value="single">Eliminatória Simples</option>
+          <option value="double">Eliminatória Dupla</option>
+          <option value="roundrobin">Todos x Todos</option>
+        </select>
+      </div>
+      <div>
+        <label>🔄 Sistema de Rodadas</label>
+        <select id="tournamentSystem">
+          <option value="single">Ida</option>
+          <option value="double">Ida e Volta</option>
+        </select>
+      </div>
+      <div>
+        <label>🎲 Quantidade de Times</label>
+        <input type="number" id="tournamentTeamsCount" placeholder="4" min="2" max="32" value="4">
+      </div>
+    </div>
+    
+    <div class="tournament-description">
+      <label>📝 Descrição (Opcional)</label>
+      <textarea id="tournamentDescription" placeholder="Descreva seu torneio..." maxlength="200"></textarea>
+    </div>
+    
+    <button onclick="createTournament()" class="btn-primary">🎯 Criar Torneio</button>
+  </div>
+
+  <!-- Lista de Torneios -->
+  <div id="tournamentsList" class="tournaments-list"></div>
+</section>
 
   <!-- Modal de Perfil de Usuário -->
   <div id="userProfileModal" class="modal" style="display:none;">

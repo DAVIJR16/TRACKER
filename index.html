@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="EAFC 26 - Gerenciador de Campeonatos de Futebol">
   <title>EAFC 26 - Victory Tracker</title>
-  <link rel="stylesheet" href="css/style.css">
-  <script type="module" src="js/app.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Botão de Tema -->
+  <button id="themeToggle" class="btn-secondary" style="position:fixed;top:20px;right:20px;z-index:2000;" onclick="toggleTheme()">🌙</button>
+
+  <!-- Notificações -->
+  <div id="notificationContainer" class="notification-container"></div>
+  
   <!-- Tela de Autenticação -->
   <div id="authScreen" class="auth-container">
     <div class="card auth-card">
@@ -16,7 +21,6 @@
         <h2>⚽ EAFC 26</h2>
         <p>Victory Tracker</p>
       </div>
-      
       <div id="loginForm" class="auth-form">
         <h3>🔐 Login</h3>
         <input type="email" id="email" placeholder="Email" required>
@@ -24,7 +28,6 @@
         <button onclick="login()" class="btn-primary">Entrar</button>
         <p class="auth-toggle">Não tem conta? <a href="#" onclick="toggleAuthForm(event)">Criar Conta</a></p>
       </div>
-
       <div id="registerForm" class="auth-form" style="display:none;">
         <h3>📝 Criar Conta</h3>
         <input type="email" id="regEmail" placeholder="Email" required>
@@ -34,7 +37,6 @@
         <button onclick="register()" class="btn-primary">Criar Conta</button>
         <p class="auth-toggle">Já tem conta? <a href="#" onclick="toggleAuthForm(event)">Fazer Login</a></p>
       </div>
-
       <div id="errorMessage" class="error-message" style="display:none;"></div>
     </div>
   </div>
@@ -42,59 +44,34 @@
   <!-- Tela Principal -->
   <div id="appScreen" style="display:none;">
     <div class="app">
-     <!-- Botão Hamburger -->
-<button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()">
-  <span></span>
-  <span></span>
-  <span></span>
-</button>
+      <!-- Botão Hamburger -->
+      <button id="sidebarToggle" class="sidebar-toggle" onclick="toggleSidebar()">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <!-- Overlay -->
+      <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
-<!-- Overlay para fechar sidebar ao clicar fora -->
-<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
-
-<!-- Sidebar -->
-<aside id="sidebar" class="sidebar">
-  <div class="sidebar-header">
-    <h2>⚽ EAFC 26</h2>
-    <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
-  </div>
-  
-  <span id="userName" class="user-name">@usuário</span>
-  <span id="userEmail" class="user-email">email@example.com</span>
-  
-  <nav class="sidebar-nav">
-    <button class="nav-btn" onclick="showSection('dashboard', event)">🏠 Dashboard</button>
-    <button class="nav-btn" onclick="showSection('leagues', event)">🎯 Ligas</button>
-    <button class="nav-btn" onclick="showSection('teams', event)">👥 Times</button>
-    <button class="nav-btn" onclick="showSection('matches', event)">⚽ Partidas</button>
-    <button class="nav-btn" onclick="showSection('ranking', event)">🏆 Ranking</button>
-    <button class="nav-btn" onclick="showSection('tournaments', event)">🏅 Torneios</button>
-    <button class="nav-btn" onclick="showSection('users', event)">👤 Usuários</button>
-    <button class="nav-btn" onclick="showSection('chat', event)">💬 Chat</button>
-    <button class="nav-btn" onclick="showSection('profile', event)">⚙️ Perfil</button>
-  </nav>
-
-  <button onclick="logout()" class="btn-logout">Sair</button>
-</aside>
       <!-- Sidebar -->
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
           <h2>⚽ EAFC 26</h2>
-          <span id="userName" class="user-name">@usuário</span>
-          <span id="userEmail" class="user-email">email@example.com</span>
+          <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
         </div>
-        
+        <span id="userName" class="user-name">@usuário</span>
+        <span id="userEmail" class="user-email">email@example.com</span>
         <nav class="sidebar-nav">
           <button class="nav-btn" onclick="showSection('dashboard', event)">🏠 Dashboard</button>
           <button class="nav-btn" onclick="showSection('leagues', event)">🎯 Ligas</button>
           <button class="nav-btn" onclick="showSection('teams', event)">👥 Times</button>
           <button class="nav-btn" onclick="showSection('matches', event)">⚽ Partidas</button>
           <button class="nav-btn" onclick="showSection('ranking', event)">🏆 Ranking</button>
+          <button class="nav-btn" onclick="showSection('tournaments', event)">🏅 Torneios</button>
           <button class="nav-btn" onclick="showSection('users', event)">👤 Usuários</button>
           <button class="nav-btn" onclick="showSection('chat', event)">💬 Chat</button>
           <button class="nav-btn" onclick="showSection('profile', event)">⚙️ Perfil</button>
         </nav>
-
         <button onclick="logout()" class="btn-logout">Sair</button>
       </aside>
 
@@ -160,58 +137,117 @@
         </section>
 
         <!-- Partidas -->
-<section id="matches" class="section">
-  <h2>⚽ Registrar Partida</h2>
-  <div class="card form-card">
-    <select id="matchLeagueSelect">
-      <option value="">Selecione uma Liga</option>
-    </select>
-    <div class="match-form-grid">
-      <div>
-        <label>Time Casa</label>
-        <select id="homeTeam"></select>
-      </div>
-      <div>
-        <label>Gols Casa</label>
-        <input type="number" id="homeGoals" placeholder="0" min="0" max="20">
-      </div>
-      <div>
-        <label>Gols Fora</label>
-        <input type="number" id="awayGoals" placeholder="0" min="0" max="20">
-      </div>
-      <div>
-        <label>Time Visitante</label>
-        <select id="awayTeam"></select>
-      </div>
-    </div>
-    
-    <!-- Nova seção: Jogadores -->
-    <div class="match-players-grid">
-      <div>
-        <label>🎮 Jogador Casa (Você)</label>
-        <input type="text" id="homePlayerName" disabled placeholder="Seu nome">
-      </div>
-      <div>
-        <label>🎮 Jogador Visitante</label>
-        <select id="awayPlayerSelect">
-          <option value="">Selecione um jogador</option>
-        </select>
-      </div>
-    </div>
-    
-    <button onclick="registerMatch()" class="btn-primary">📝 Registrar Partida</button>
-  </div>
-  <div id="matchesList" class="matches-list"></div>
-</section>
+        <section id="matches" class="section">
+          <h2>⚽ Registrar Partida</h2>
+          <div class="card form-card">
+            <select id="matchLeagueSelect">
+              <option value="">Selecione uma Liga</option>
+            </select>
+            <div class="match-form-grid">
+              <div>
+                <label>Time Casa</label>
+                <select id="homeTeam"></select>
+              </div>
+              <div>
+                <label>Gols Casa</label>
+                <input type="number" id="homeGoals" placeholder="0" min="0" max="20">
+              </div>
+              <div>
+                <label>Gols Fora</label>
+                <input type="number" id="awayGoals" placeholder="0" min="0" max="20">
+              </div>
+              <div>
+                <label>Time Visitante</label>
+                <select id="awayTeam"></select>
+              </div>
+            </div>
+            <button onclick="registerMatch()" class="btn-primary">📝 Registrar Partida</button>
+            
+            <!-- FILTROS DE PARTIDA -->
+            <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;">
+              <button onclick="filterMatches('7days')" class="btn-secondary">📅 Últimos 7 Dias</button>
+              <button onclick="filterMatches('30days')" class="btn-secondary">📅 Últimos 30 Dias</button>
+              <button onclick="filterMatches('all')" class="btn-secondary">📅 Todas</button>
+              <button onclick="exportMatchesCSV()" class="btn-primary">📥 Exportar CSV</button>
+            </div>
+
+            <!-- Busca Avançada -->
+            <h4 style="margin-top:20px;margin-bottom:12px;color:var(--text);">🔍 Busca Avançada</h4>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+              <select id="searchLeague">
+                <option value="">Todas as Ligas</option>
+              </select>
+              <select id="searchResult">
+                <option value="">Todos os Resultados</option>
+                <option value="win">Vitória Casa</option>
+                <option value="draw">Empate</option>
+                <option value="loss">Derrota Casa</option>
+              </select>
+              <select id="searchPeriod">
+                <option value="all">Todos os Períodos</option>
+                <option value="7days">7 Dias</option>
+                <option value="30days">30 Dias</option>
+                <option value="90days">90 Dias</option>
+              </select>
+              <button onclick="advancedMatchSearch()" class="btn-view">🔍 Buscar</button>
+            </div>
+          </div>
+          <div id="matchesList" class="matches-list"></div>
+        </section>
 
         <!-- Ranking -->
         <section id="ranking" class="section">
           <h2>🏆 Ranking Geral</h2>
-          <select id="rankingLeagueFilter">
-            <option value="">Todas as Ligas</option>
-            <button class="nav-btn" onclick="showSection('tournaments', event)">🏅 Torneios</button>
-          </select>
+          <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
+            <select id="rankingLeagueFilter" style="flex:1;min-width:150px;">
+              <option value="">Todas as Ligas</option>
+            </select>
+            <button onclick="exportRankingCSV()" class="btn-primary">📥 Exportar Ranking CSV</button>
+            <button onclick="showTeamRankings()" class="btn-secondary">🏆 Ranking Avançado</button>
+          </div>
           <div id="rankingTable" class="ranking-table"></div>
+        </section>
+
+        <!-- Torneios -->
+        <section id="tournaments" class="section">
+          <h2>🏅 Torneios</h2>
+          <div class="card form-card">
+            <h3 style="margin-bottom: 20px; text-align: center;">➕ Criar Novo Torneio</h3>
+            <input type="text" id="tournamentName" placeholder="Nome do Torneio" maxlength="50">
+            <select id="tournamentLeague">
+              <option value="">Selecione uma Liga</option>
+            </select>
+            
+            <div class="tournament-config-grid">
+              <div>
+                <label>📊 Formato</label>
+                <select id="tournamentFormat">
+                  <option value="single">Eliminatória Simples</option>
+                  <option value="double">Eliminatória Dupla</option>
+                  <option value="roundrobin">Todos x Todos</option>
+                </select>
+              </div>
+              <div>
+                <label>🔄 Sistema</label>
+                <select id="tournamentSystem">
+                  <option value="single">Ida</option>
+                  <option value="double">Ida e Volta</option>
+                </select>
+              </div>
+              <div>
+                <label>🎲 Qtde Times</label>
+                <input type="number" id="tournamentTeamsCount" placeholder="4" min="2" max="32" value="4">
+              </div>
+            </div>
+            
+            <div class="tournament-description">
+              <label>📝 Descrição (Opcional)</label>
+              <textarea id="tournamentDescription" placeholder="Descreva seu torneio..." maxlength="200"></textarea>
+            </div>
+            
+            <button onclick="createTournament()" class="btn-primary">🎯 Criar Torneio</button>
+          </div>
+          <div id="tournamentsList" class="tournaments-list"></div>
         </section>
 
         <!-- Usuários -->
@@ -280,59 +316,15 @@
               </div>
 
               <button onclick="updateProfile()" class="btn-primary">💾 Salvar Perfil</button>
+              <button onclick="showGeneralStats()" class="btn-secondary" style="margin-top:12px;width:100%;">📊 Ver Estatísticas Gerais</button>
             </div>
           </div>
         </section>
       </main>
     </div>
   </div>
-  <!-- Torneios -->
-<section id="tournaments" class="section">
-  <h2>🏅 Torneios</h2>
-  
-  <!-- Criar Torneio -->
-  <div class="card form-card">
-    <h3 style="margin-bottom: 20px; text-align: center;">➕ Criar Novo Torneio</h3>
-    <input type="text" id="tournamentName" placeholder="Nome do Torneio" maxlength="50">
-    <select id="tournamentLeague">
-      <option value="">Selecione uma Liga</option>
-    </select>
-    
-    <div class="tournament-config-grid">
-      <div>
-        <label>📊 Formato</label>
-        <select id="tournamentFormat">
-          <option value="single">Eliminatória Simples</option>
-          <option value="double">Eliminatória Dupla</option>
-          <option value="roundrobin">Todos x Todos</option>
-        </select>
-      </div>
-      <div>
-        <label>🔄 Sistema de Rodadas</label>
-        <select id="tournamentSystem">
-          <option value="single">Ida</option>
-          <option value="double">Ida e Volta</option>
-        </select>
-      </div>
-      <div>
-        <label>🎲 Quantidade de Times</label>
-        <input type="number" id="tournamentTeamsCount" placeholder="4" min="2" max="32" value="4">
-      </div>
-    </div>
-    
-    <div class="tournament-description">
-      <label>📝 Descrição (Opcional)</label>
-      <textarea id="tournamentDescription" placeholder="Descreva seu torneio..." maxlength="200"></textarea>
-    </div>
-    
-    <button onclick="createTournament()" class="btn-primary">🎯 Criar Torneio</button>
-  </div>
 
-  <!-- Lista de Torneios -->
-  <div id="tournamentsList" class="tournaments-list"></div>
-</section>
-
-  <!-- Modal de Perfil de Usuário -->
+  <!-- Modal de Perfil de Usuário/Estatísticas -->
   <div id="userProfileModal" class="modal" style="display:none;">
     <div class="modal-content">
       <button class="modal-close" onclick="closeUserModal()">✕</button>
@@ -355,5 +347,8 @@
 
   <!-- Toast Notification -->
   <div id="toast" class="toast"></div>
+
+  <!-- Scripts Firebase -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>

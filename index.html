@@ -136,62 +136,120 @@
           <div id="teamsList" class="teams-grid"></div>
         </section>
 
-        <!-- Partidas -->
+        <!-- Partidas - NOVA VERSÃO -->
         <section id="matches" class="section">
           <h2>⚽ Registrar Partida</h2>
           <div class="card form-card">
-            <select id="matchLeagueSelect">
-              <option value="">Selecione uma Liga</option>
-            </select>
-            <div class="match-form-grid">
-              <div>
-                <label>Time Casa</label>
-                <select id="homeTeam"></select>
-              </div>
-              <div>
-                <label>Gols Casa</label>
-                <input type="number" id="homeGoals" placeholder="0" min="0" max="20">
-              </div>
-              <div>
-                <label>Gols Fora</label>
-                <input type="number" id="awayGoals" placeholder="0" min="0" max="20">
-              </div>
-              <div>
-                <label>Time Visitante</label>
-                <select id="awayTeam"></select>
-              </div>
-            </div>
-            <button onclick="registerMatch()" class="btn-primary">📝 Registrar Partida</button>
+            <h3 style="text-align: center; margin-bottom: 24px; color: var(--accent);">🎮 Configurar Partida</h3>
             
-            <!-- FILTROS DE PARTIDA -->
-            <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;">
-              <button onclick="filterMatches('7days')" class="btn-secondary">📅 Últimos 7 Dias</button>
-              <button onclick="filterMatches('30days')" class="btn-secondary">📅 Últimos 30 Dias</button>
-              <button onclick="filterMatches('all')" class="btn-secondary">📅 Todas</button>
-              <button onclick="exportMatchesCSV()" class="btn-primary">📥 Exportar CSV</button>
+            <!-- TIME DE CASA (SEU TIME) -->
+            <div class="match-section">
+              <h4 style="margin-bottom: 16px; color: var(--text);">🏠 Seu Time (Casa)</h4>
+              <div class="match-team-grid">
+                <div>
+                  <label>Liga do Seu Time</label>
+                  <select id="homeLeagueSelect" onchange="updateHomeTeamsUI()">
+                    <option value="">Selecione a Liga</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Seu Time</label>
+                  <select id="homeTeam">
+                    <option value="">Selecione um time</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Gols Marcados</label>
+                  <input type="number" id="homeGoals" placeholder="0" min="0" max="99">
+                </div>
+                <div>
+                  <label>Pênaltis (opcional)</label>
+                  <input type="number" id="homePenalties" placeholder="0" min="0" max="10">
+                </div>
+              </div>
             </div>
 
-            <!-- Busca Avançada -->
-            <h4 style="margin-top:20px;margin-bottom:12px;color:var(--text);">🔍 Busca Avançada</h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
-              <select id="searchLeague">
-                <option value="">Todas as Ligas</option>
-              </select>
-              <select id="searchResult">
-                <option value="">Todos os Resultados</option>
-                <option value="win">Vitória Casa</option>
-                <option value="draw">Empate</option>
-                <option value="loss">Derrota Casa</option>
-              </select>
-              <select id="searchPeriod">
-                <option value="all">Todos os Períodos</option>
-                <option value="7days">7 Dias</option>
-                <option value="30days">30 Dias</option>
-                <option value="90days">90 Dias</option>
-              </select>
-              <button onclick="advancedMatchSearch()" class="btn-view">🔍 Buscar</button>
+            <!-- VERSUS -->
+            <div style="text-align: center; margin: 24px 0; padding: 16px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+              <h2 style="color: var(--accent); font-size: 1.8rem; margin: 0;">⚔️ VS ⚔️</h2>
+            </div>
+
+            <!-- TIME DE FORA (ADVERSÁRIO) -->
+            <div class="match-section">
+              <h4 style="margin-bottom: 16px; color: var(--text);">🏃 Time do Adversário (Fora)</h4>
+              
+              <!-- Seleção de Adversário -->
+              <div class="match-team-grid">
+                <div style="grid-column: 1 / -1;">
+                  <label>Selecione o Adversário</label>
+                  <select id="opponentAwaySelect" onchange="updateAwayTeamsUI()">
+                    <option value="">Escolha um adversário</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Liga e Time do Adversário -->
+              <div class="match-team-grid" style="margin-top: 16px;">
+                <div>
+                  <label>Liga do Adversário</label>
+                  <select id="awayLeagueSelect" onchange="updateAwayTeamsByLeague()">
+                    <option value="">Selecione a Liga</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Time do Adversário</label>
+                  <select id="awayTeam">
+                    <option value="">Selecione um time</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Gols Marcados</label>
+                  <input type="number" id="awayGoals" placeholder="0" min="0" max="99">
+                </div>
+                <div>
+                  <label>Pênaltis (opcional)</label>
+                  <input type="number" id="awayPenalties" placeholder="0" min="0" max="10">
+                </div>
+              </div>
+            </div>
+
+            <button onclick="registerMatch()" class="btn-primary" style="margin-top: 24px; width: 100%;">
+              📝 Registrar Partida
+            </button>
+
+            <!-- FILTROS E BUSCAS -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+              <h4 style="margin-bottom: 16px; color: var(--accent);">🔍 Filtrar Partidas</h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                <button onclick="filterMatches('7days')" class="btn-secondary">📅 Últimos 7 Dias</button>
+                <button onclick="filterMatches('30days')" class="btn-secondary">📅 Últimos 30 Dias</button>
+                <button onclick="filterMatches('all')" class="btn-secondary">📅 Todas</button>
+                <button onclick="exportMatchesCSV()" class="btn-primary">📥 Exportar CSV</button>
+              </div>
+
+              <!-- BUSCA AVANÇADA -->
+              <h4 style="margin-bottom: 12px; color: var(--accent);">🎯 Busca Avançada</h4>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                <select id="searchLeague">
+                  <option value="">Todas as Ligas</option>
+                </select>
+                <select id="searchResult">
+                  <option value="">Todos os Resultados</option>
+                  <option value="win">Vitória Casa</option>
+                  <option value="draw">Empate</option>
+                  <option value="loss">Derrota Casa</option>
+                </select>
+                <select id="searchPeriod">
+                  <option value="all">Todos os Períodos</option>
+                  <option value="7days">7 Dias</option>
+                  <option value="30days">30 Dias</option>
+                  <option value="90days">90 Dias</option>
+                </select>
+                <button onclick="advancedMatchSearch()" class="btn-view">🔍 Buscar</button>
+              </div>
             </div>
           </div>
+
           <div id="matchesList" class="matches-list"></div>
         </section>
 
@@ -202,7 +260,14 @@
             <select id="rankingLeagueFilter" style="flex:1;min-width:150px;">
               <option value="">Todas as Ligas</option>
             </select>
-            <button onclick="exportRankingCSV()" class="btn-primary">📥 Exportar Ranking CSV</button>
+            <select id="rankingModeSelect" style="flex:1;min-width:150px;" onchange="updateRanking()">
+              <option value="league">📍 Por Liga</option>
+              <option value="opponent">⚔️ Vs Adversário</option>
+            </select>
+            <select id="rankingOpponentSelect" style="flex:1;min-width:150px; display:none;" onchange="updateRanking()">
+              <option value="">Selecione um Adversário</option>
+            </select>
+            <button onclick="exportRankingCSV()" class="btn-primary">📥 Exportar CSV</button>
             <button onclick="showTeamRankings()" class="btn-secondary">🏆 Ranking Avançado</button>
           </div>
           <div id="rankingTable" class="ranking-table"></div>
@@ -214,9 +279,15 @@
           <div class="card form-card">
             <h3 style="margin-bottom: 20px; text-align: center;">➕ Criar Novo Torneio</h3>
             <input type="text" id="tournamentName" placeholder="Nome do Torneio" maxlength="50">
-            <select id="tournamentLeague">
-              <option value="">Selecione uma Liga</option>
-            </select>
+            
+            <!-- Seleção de Múltiplas Ligas -->
+            <div style="margin: 20px 0;">
+              <label style="display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Selecione as Ligas 🎯</label>
+              <div id="tournamentLeaguesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                <!-- Preenchido dinamicamente -->
+              </div>
+              <p id="tournamentTeamsCount" style="margin-top: 12px; color: var(--accent); font-weight: 600;">Times disponíveis: 0</p>
+            </div>
             
             <div class="tournament-config-grid">
               <div>
@@ -236,7 +307,7 @@
               </div>
               <div>
                 <label>🎲 Qtde Times</label>
-                <input type="number" id="tournamentTeamsCount" placeholder="4" min="2" max="32" value="4">
+                <input type="number" id="tournamentMaxTeamsCount" placeholder="4" min="2" max="32" value="4">
               </div>
             </div>
             

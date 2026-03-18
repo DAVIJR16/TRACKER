@@ -220,6 +220,13 @@ onAuthStateChanged(auth, async (user) => {
       await loadUserProfile();
       await loadLeagues();
       await loadUsers();
+      
+      setTimeout(() => {
+        updateOpponentSelect();
+        updateRankingOpponentSelect();
+        updateLeagueSelects();
+      }, 300);
+      
       console.log("✅ Dados carregados com sucesso!");
     } catch (error) {
       console.error("❌ Erro ao carregar dados:", error);
@@ -370,6 +377,7 @@ async function loadUsers() {
       }
     });
     updateUsersList();
+    console.log("✅ Usuários carregados:", users.length);
   } catch (error) {
     console.error("❌ Erro ao carregar usuários:", error);
   }
@@ -511,6 +519,11 @@ window.toggleFollowUser = async function(userId) {
     await loadUsers();
     updateProfileUI();
     loadConversations();
+    
+    setTimeout(() => {
+      updateOpponentSelect();
+      updateRankingOpponentSelect();
+    }, 300);
 
     if (currentModalUserId) {
       await openUserModal(currentModalUserId);
@@ -720,9 +733,8 @@ window.deleteLeague = async function(leagueId) {
 function updateLeagueSelects() {
   const leagueSelects = [
     document.getElementById("leagueSelect"),
-    document.getElementById("matchLeagueSelect"),
     document.getElementById("rankingLeagueFilter"),
-    document.getElementById("tournamentLeague")
+    document.getElementById("searchLeague")
   ];
 
   leagueSelects.forEach(select => {
@@ -730,6 +742,8 @@ function updateLeagueSelects() {
       const currentValue = select.value;
       select.innerHTML = select.id === "rankingLeagueFilter" 
         ? '<option value="">Todas as Ligas</option>' 
+        : select.id === "searchLeague"
+        ? '<option value="">Todas as Ligas</option>'
         : '<option value="">Selecione uma Liga</option>';
       
       leagues.forEach(league => {
@@ -739,6 +753,16 @@ function updateLeagueSelects() {
       select.value = currentValue;
     }
   });
+
+  const homeLeagueSelect = document.getElementById("homeLeagueSelect");
+  if (homeLeagueSelect) {
+    const currentValue = homeLeagueSelect.value;
+    homeLeagueSelect.innerHTML = '<option value="">Selecione a Liga do Seu Time</option>';
+    leagues.forEach(league => {
+      homeLeagueSelect.innerHTML += `<option value="${league.id}">${league.name}</option>`;
+    });
+    homeLeagueSelect.value = currentValue;
+  }
 }
 
 function updateLeaguesList() {
@@ -751,13 +775,13 @@ function updateLeaguesList() {
 
   list.innerHTML = leagues.map(league => {
     const leagueTeams = teams.filter(t => t.leagueId === league.id);
-    const leagueMatches = matches.filter(m => m.leagueId === league.id);
+    const leagueMatches = matches.filter(m => m.homeLeagueId === league.id || m.awayLeagueId === league.id);
     
     return `
       <div class="card league-card">
         <div class="league-header">
           <h3>${league.name}</h3>
-          <button onclick="deleteLeague('${league.id}')" class="btn-delete-sm" title="Deletar Liga">🗑️</button>
+          <button onclick="deleteLeague('${league.id}')" class="btn-delete-sm" title="Deletar Liga">���️</button>
         </div>
         <p class="league-description">${league.description}</p>
         <div class="league-stats">
@@ -850,7 +874,7 @@ window.deleteTeam = async function(teamId) {
   }
 };
 
-// ===== PARTIDAS =====
+// ===== PARTIDAS - NOVA VERSÃO =====
 async function loadMatches() {
   try {
     const querySnapshot = await getDocs(
@@ -868,21 +892,125 @@ async function loadMatches() {
   }
 }
 
+// Função para atualizar select de adversários
+window.updateOpponentSelect = function() {
+  const select = document.getElementById("opponentAwaySelect");
+  if (!select) return;
+
+  console.log("🔄 Atualizando adversários...");
+  console.log("User Profile:", userProfile);
+  console.log("Users:", users);
+
+  if (!userProfile?.following || userProfile.following.length === 0) {
+    select.innerHTML = '<option value="">Nenhum adversário seguido</option>';
+    console.log("⚠️ Nenhum usuário seguido");
+    return;
+  }
+
+  select.innerHTML = '<option value="">Escolha um adversário</option>';
+
+  userProfile.following.forEach(userId => {
+    const user = users.find(u => u.uid === userId);
+    if (user) {
+      select.innerHTML += `<option value="${user.uid}">${user.displayUsername} (@${user.username})</option>`;
+      console.log("✅ Adversário adicionado:", user.displayUsername);
+    }
+  });
+};
+
+// Atualizar quando adversário é selecionado
+window.updateAwayTeamsUI = function() {
+  const opponentId = document.getElementById("opponentAwaySelect").value;
+  const awayLeagueSelect = document.getElementById("awayLeagueSelect");
+  const awayTeamSelect = document.getElementById("awayTeam");
+
+  awayLeagueSelect.innerHTML = '<option value="">Selecione a Liga do Adversário</option>';
+  awayTeamSelect.innerHTML = '<option value="">Selecione um time</option>';
+
+  if (!opponentId) {
+    return;
+  }
+
+  leagues.forEach(league => {
+    awayLeagueSelect.innerHTML += `<option value="${league.id}">${league.name}</option>`;
+  });
+};
+
+// Atualizar times do adversário quando liga é selecionada
+window.updateAwayTeamsByLeague = function() {
+  const leagueId = document.getElementById("awayLeagueSelect").value;
+  const awayTeamSelect = document.getElementById("awayTeam");
+
+  awayTeamSelect.innerHTML = '<option value="">Selecione um time</option>';
+
+  if (!leagueId) {
+    return;
+  }
+
+  const leagueTeams = teams.filter(t => t.leagueId === leagueId);
+
+  leagueTeams.forEach(team => {
+    awayTeamSelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
+  });
+};
+
+// Atualizar times do mandante por liga
+window.updateHomeTeamsUI = function() {
+  const leagueId = document.getElementById("homeLeagueSelect").value;
+  const homeSelect = document.getElementById("homeTeam");
+
+  homeSelect.innerHTML = '<option value="">Selecione um time</option>';
+
+  if (!leagueId) {
+    return;
+  }
+
+  const leagueTeams = teams.filter(t => t.leagueId === leagueId);
+
+  leagueTeams.forEach(team => {
+    homeSelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
+  });
+};
+
+// FUNÇÃO PRINCIPAL: Registrar partida com adversário
 window.registerMatch = async function() {
   try {
-    const leagueId = document.getElementById("matchLeagueSelect").value;
+    // TIME DE CASA (SEU TIME)
+    const homeLeagueId = document.getElementById("homeLeagueSelect").value;
     const homeId = document.getElementById("homeTeam").value;
-    const awayId = document.getElementById("awayTeam").value;
     const homeGoals = parseInt(document.getElementById("homeGoals").value) || 0;
-    const awayGoals = parseInt(document.getElementById("awayGoals").value) || 0;
+    const homePenalties = parseInt(document.getElementById("homePenalties").value) || 0;
 
-    if (!leagueId) {
-      showError("Selecione uma liga!");
+    // TIME DE FORA (ADVERSÁRIO)
+    const opponentUserId = document.getElementById("opponentAwaySelect").value;
+    const awayLeagueId = document.getElementById("awayLeagueSelect").value;
+    const awayId = document.getElementById("awayTeam").value;
+    const awayGoals = parseInt(document.getElementById("awayGoals").value) || 0;
+    const awayPenalties = parseInt(document.getElementById("awayPenalties").value) || 0;
+
+    // Validações
+    if (!homeLeagueId) {
+      showError("Selecione a liga do seu time!");
       return;
     }
 
-    if (!homeId || !awayId) {
-      showError("Selecione ambos os times!");
+    if (!homeId) {
+      showError("Selecione seu time!");
+      return;
+    }
+
+    if (!opponentUserId) {
+      showError("Selecione um adversário!");
+      return;
+    }
+
+    if (!awayLeagueId) {
+      showError("Selecione a liga do adversário!");
+      return;
+    }
+
+    if (!awayId) {
+      showError("Selecione o time do adversário!");
       return;
     }
 
@@ -891,19 +1019,49 @@ window.registerMatch = async function() {
       return;
     }
 
+    // Obter dados dos times
     const home = teams.find(t => t.id === homeId);
     const away = teams.find(t => t.id === awayId);
+    const homeLeague = leagues.find(l => l.id === homeLeagueId);
+    const awayLeague = leagues.find(l => l.id === awayLeagueId);
+    const opponentUser = users.find(u => u.uid === opponentUserId);
 
+    // Atualizar estatísticas do time de casa
     home.goalsFor += homeGoals;
     home.goalsAgainst += awayGoals;
     away.goalsFor += awayGoals;
     away.goalsAgainst += homeGoals;
 
+    // Determinar resultado (considerando pênaltis se necessário)
+    let homeWins = false;
+    let awayWins = false;
+    let isDraw = false;
+
     if (homeGoals > awayGoals) {
+      homeWins = true;
+    } else if (homeGoals < awayGoals) {
+      awayWins = true;
+    } else {
+      // Se empate nos gols, ver pênaltis
+      if (homePenalties > 0 || awayPenalties > 0) {
+        if (homePenalties > awayPenalties) {
+          homeWins = true;
+        } else if (awayPenalties > homePenalties) {
+          awayWins = true;
+        } else {
+          isDraw = true;
+        }
+      } else {
+        isDraw = true;
+      }
+    }
+
+    // Atualizar pontos
+    if (homeWins) {
       home.wins++;
       home.points += 3;
       away.losses++;
-    } else if (homeGoals < awayGoals) {
+    } else if (awayWins) {
       away.wins++;
       away.points += 3;
       home.losses++;
@@ -914,29 +1072,51 @@ window.registerMatch = async function() {
       away.points++;
     }
 
+    // Salvar atualização dos times
     const batch = writeBatch(db);
     batch.update(doc(db, "teams", home.id), home);
     batch.update(doc(db, "teams", away.id), away);
 
-    await addDoc(collection(db, "matches"), {
-      leagueId,
+    // Criar documento da partida
+    const matchData = {
+      homeLeagueId: homeLeagueId,
+      homeLeague: homeLeague.name,
+      awayLeagueId: awayLeagueId,
+      awayLeague: awayLeague.name,
       homeTeam: home.name,
       homeId: home.id,
       awayTeam: away.name,
       awayId: away.id,
       homeGoals,
       awayGoals,
-      date: new Date().toISOString()
-    });
+      homePenalties,
+      awayPenalties,
+      date: new Date().toISOString(),
+      opponentUserId: opponentUserId,
+      opponentUsername: opponentUser.displayUsername,
+      opponentAvatar: opponentUser.photoURL,
+      matchType: "vs_opponent"
+    };
 
+    await addDoc(collection(db, "matches"), matchData);
     await batch.commit();
 
+    // Limpar campos
+    document.getElementById("homeLeagueSelect").value = "";
+    document.getElementById("homeTeam").value = "";
     document.getElementById("homeGoals").value = "";
+    document.getElementById("homePenalties").value = "";
+    document.getElementById("opponentAwaySelect").value = "";
+    document.getElementById("awayLeagueSelect").value = "";
+    document.getElementById("awayTeam").value = "";
     document.getElementById("awayGoals").value = "";
+    document.getElementById("awayPenalties").value = "";
 
     showToast("✅ Partida registrada com sucesso!");
     loadTeams();
     loadMatches();
+    updateHomeTeamsUI();
+    updateAwayTeamsUI();
   } catch (error) {
     console.error("❌ Erro ao registrar partida:", error);
     showError("Erro ao registrar partida");
@@ -962,6 +1142,10 @@ window.filterMatches = function(filter) {
     });
   }
 
+  displayFilteredMatches(filtered);
+};
+
+function displayFilteredMatches(filtered) {
   const list = document.getElementById("matchesList");
   
   if (filtered.length === 0) {
@@ -973,13 +1157,24 @@ window.filterMatches = function(filter) {
     <div class="card match-card">
       <div class="match-teams">
         <strong>${match.homeTeam}</strong>
-        <div class="match-result">${match.homeGoals} × ${match.awayGoals}</div>
+        <div class="match-result">
+          ${match.homeGoals} × ${match.awayGoals}
+          ${match.homePenalties > 0 || match.awayPenalties > 0 ? 
+            `<span style="font-size: 0.8rem; color: var(--warning);">(${match.homePenalties}p ${match.awayPenalties})</span>` 
+            : ''}
+        </div>
         <strong>${match.awayTeam}</strong>
         <div class="match-date">${formatDate(match.date)}</div>
+        ${match.opponentUsername ? 
+          `<div style="font-size: 0.75rem; color: var(--accent); margin-top: 4px;">⚔️ vs ${match.opponentUsername}</div>` 
+          : ''}
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">
+          ${match.homeLeague} vs ${match.awayLeague}
+        </div>
       </div>
     </div>
   `).join("");
-};
+}
 
 function updateMatchesList() {
   const list = document.getElementById("matchesList");
@@ -993,66 +1188,59 @@ function updateMatchesList() {
     <div class="card match-card">
       <div class="match-teams">
         <strong>${match.homeTeam}</strong>
-        <div class="match-result">${match.homeGoals} × ${match.awayGoals}</div>
+        <div class="match-result">
+          ${match.homeGoals} × ${match.awayGoals}
+          ${match.homePenalties > 0 || match.awayPenalties > 0 ? 
+            `<span style="font-size: 0.8rem; color: var(--warning);">(${match.homePenalties}p ${match.awayPenalties})</span>` 
+            : ''}
+        </div>
         <strong>${match.awayTeam}</strong>
         <div class="match-date">${formatDate(match.date)}</div>
+        ${match.opponentUsername ? 
+          `<div style="font-size: 0.75rem; color: var(--accent); margin-top: 4px;">⚔️ vs ${match.opponentUsername}</div>` 
+          : ''}
+        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">
+          ${match.homeLeague} vs ${match.awayLeague}
+        </div>
       </div>
     </div>
   `).join("");
 }
 
-// ===== ESTATÍSTICAS AVANÇADAS =====
-window.getTeamStats = function(teamId) {
-  const team = teams.find(t => t.id === teamId);
-  if (!team) return null;
+// ===== BUSCA AVANÇADA DE PARTIDAS =====
+window.advancedMatchSearch = function() {
+  const leagueFilter = document.getElementById("searchLeague")?.value || '';
+  const resultFilter = document.getElementById("searchResult")?.value || '';
+  const periodFilter = document.getElementById("searchPeriod")?.value || '30days';
 
-  const teamMatches = matches.filter(m => m.homeId === teamId || m.awayId === teamId);
-  const winRate = teamMatches.length > 0 ? ((team.wins / teamMatches.length) * 100).toFixed(1) : 0;
-  const goalAverage = teamMatches.length > 0 ? (team.goalsFor / teamMatches.length).toFixed(2) : 0;
+  let filtered = matches;
 
-  return {
-    matches: teamMatches.length,
-    winRate,
-    goalAverage,
-    goalDifference: team.goalsFor - team.goalsAgainst
-  };
-};
-
-window.showTeamStatistics = function(teamId) {
-  const team = teams.find(t => t.id === teamId);
-  const stats = getTeamStats(teamId);
-
-  if (!stats) {
-    showError("Time não encontrado!");
-    return;
+  if (leagueFilter) {
+    filtered = filtered.filter(m => m.homeLeagueId === leagueFilter || m.awayLeagueId === leagueFilter);
   }
 
-  const statsHtml = `
-    <div class="stats-modal">
-      <h3>${team.name}</h3>
-      <div class="stat-item">
-        <span>Partidas Jogadas:</span>
-        <strong>${stats.matches}</strong>
-      </div>
-      <div class="stat-item">
-        <span>Taxa de Vitória:</span>
-        <strong>${stats.winRate}%</strong>
-      </div>
-      <div class="stat-item">
-        <span>Média de Gols:</span>
-        <strong>${stats.goalAverage}</strong>
-      </div>
-      <div class="stat-item">
-        <span>Saldo de Gols:</span>
-        <strong>${stats.goalDifference > 0 ? '+' : ''}${stats.goalDifference}</strong>
-      </div>
-    </div>
-  `;
+  if (resultFilter) {
+    filtered = filtered.filter(m => {
+      if (resultFilter === 'win') return m.homeGoals > m.awayGoals;
+      if (resultFilter === 'draw') return m.homeGoals === m.awayGoals;
+      if (resultFilter === 'loss') return m.homeGoals < m.awayGoals;
+    });
+  }
 
-  const modal = document.getElementById("userProfileModal");
-  const modalContent = modal.querySelector(".modal-content");
-  modalContent.innerHTML = statsHtml + '<button class="btn-primary" onclick="closeUserModal()" style="margin-top: 20px; width: 100%;">Fechar</button>';
-  modal.style.display = "flex";
+  const now = new Date();
+  if (periodFilter !== 'all') {
+    filtered = filtered.filter(m => {
+      const matchDate = new Date(m.date);
+      const daysAgo = (now - matchDate) / (1000 * 60 * 60 * 24);
+      
+      if (periodFilter === '7days') return daysAgo <= 7;
+      if (periodFilter === '30days') return daysAgo <= 30;
+      if (periodFilter === '90days') return daysAgo <= 90;
+      return true;
+    });
+  }
+
+  displayFilteredMatches(filtered);
 };
 
 // ===== EXPORT PARA CSV =====
@@ -1062,11 +1250,12 @@ window.exportMatchesCSV = function() {
     return;
   }
 
-  let csv = "Data,Time Casa,Gols Casa,Gols Fora,Time Visitante,Liga\n";
+  let csv = "Data,Time Casa,Liga Casa,Gols Casa,Pênaltis Casa,Gols Fora,Pênaltis Fora,Time Visitante,Liga Visitante,Adversário\n";
 
   matches.forEach(match => {
     const date = formatDate(match.date).split(',')[0];
-    csv += `${date},"${match.homeTeam}",${match.homeGoals},${match.awayGoals},"${match.awayTeam}","${match.leagueId}"\n`;
+    const opponent = match.opponentUsername || "Liga";
+    csv += `${date},"${match.homeTeam}","${match.homeLeague}",${match.homeGoals},${match.homePenalties},${match.awayGoals},${match.awayPenalties},"${match.awayTeam}","${match.awayLeague}","${opponent}"\n`;
   });
 
   downloadCSV(csv, 'partidas.csv');
@@ -1133,19 +1322,50 @@ async function loadTournaments() {
       tournaments.push({ id: docSnapshot.id, ...docSnapshot.data() });
     });
     updateTournamentsUI();
+    updateTournamentLeaguesCheckboxes();
   } catch (error) {
     console.error("❌ Erro ao carregar torneios:", error);
   }
 }
 
+function updateTournamentLeaguesCheckboxes() {
+  const container = document.getElementById("tournamentLeaguesContainer");
+  if (!container) return;
+
+  container.innerHTML = leagues.map(league => {
+    const leagueTeams = teams.filter(t => t.leagueId === league.id);
+    return `
+      <label style="display: flex; align-items: center; gap: 10px; padding: 12px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; cursor: pointer; border: 2px solid rgba(0, 212, 255, 0.2); transition: var(--transition);">
+        <input type="checkbox" class="tournament-league-checkbox" value="${league.id}" onchange="updateTournamentTeamsUI()">
+        <span>${league.name} (${leagueTeams.length} times)</span>
+      </label>
+    `;
+  }).join("");
+}
+
+window.updateTournamentTeamsUI = function() {
+  const checkboxes = document.querySelectorAll(".tournament-league-checkbox:checked");
+  let totalTeams = 0;
+
+  checkboxes.forEach(checkbox => {
+    const leagueId = checkbox.value;
+    const leagueTeams = teams.filter(t => t.leagueId === leagueId);
+    totalTeams += leagueTeams.length;
+  });
+
+  document.getElementById("tournamentTeamsCount").innerText = `Times disponíveis: ${totalTeams}`;
+};
+
 window.createTournament = async function() {
   try {
     const name = document.getElementById("tournamentName").value.trim();
-    const leagueId = document.getElementById("tournamentLeague").value;
     const format = document.getElementById("tournamentFormat").value;
     const system = document.getElementById("tournamentSystem").value;
-    const teamsCount = parseInt(document.getElementById("tournamentTeamsCount").value) || 4;
+    const teamsCount = parseInt(document.getElementById("tournamentMaxTeamsCount").value) || 4;
     const description = document.getElementById("tournamentDescription").value.trim();
+
+    const checkboxes = document.querySelectorAll(".tournament-league-checkbox:checked");
+    const selectedLeagues = Array.from(checkboxes).map(cb => cb.value);
 
     if (!name) {
       showError("Digite o nome do torneio!");
@@ -1157,8 +1377,8 @@ window.createTournament = async function() {
       return;
     }
 
-    if (!leagueId) {
-      showError("Selecione uma liga!");
+    if (selectedLeagues.length === 0) {
+      showError("Selecione pelo menos uma liga!");
       return;
     }
 
@@ -1176,12 +1396,21 @@ window.createTournament = async function() {
       return;
     }
 
-    const league = leagues.find(l => l.id === leagueId);
+    const selectedLeaguesData = selectedLeagues.map(leagueId => {
+      const league = leagues.find(l => l.id === leagueId);
+      return { id: leagueId, name: league.name };
+    });
+
+    const tournamentTeams = teams.filter(t => selectedLeagues.includes(t.leagueId));
+
+    if (tournamentTeams.length < teamsCount) {
+      showError(`Não há ${teamsCount} times nas ligas selecionadas! Há apenas ${tournamentTeams.length} times.`);
+      return;
+    }
 
     await addDoc(collection(db, "tournaments"), {
       name,
-      leagueId,
-      leagueName: league.name,
+      selectedLeagues: selectedLeaguesData,
       format,
       system,
       teamsCount,
@@ -1195,11 +1424,11 @@ window.createTournament = async function() {
     });
 
     document.getElementById("tournamentName").value = "";
-    document.getElementById("tournamentLeague").value = "";
     document.getElementById("tournamentFormat").value = "single";
     document.getElementById("tournamentSystem").value = "single";
-    document.getElementById("tournamentTeamsCount").value = "4";
+    document.getElementById("tournamentMaxTeamsCount").value = "4";
     document.getElementById("tournamentDescription").value = "";
+    document.querySelectorAll(".tournament-league-checkbox").forEach(cb => cb.checked = false);
 
     showToast("🏅 Torneio criado com sucesso!");
     loadTournaments();
@@ -1225,9 +1454,10 @@ window.deleteTournament = async function(tournamentId) {
 window.openDrawModal = async function(tournamentId) {
   try {
     const tournament = tournaments.find(t => t.id === tournamentId);
-    const leagueTeams = teams.filter(t => t.leagueId === tournament.leagueId);
+    const selectedLeagueIds = tournament.selectedLeagues.map(l => l.id);
+    const availableTeams = teams.filter(t => selectedLeagueIds.includes(t.leagueId));
 
-    if (leagueTeams.length < tournament.teamsCount) {
+    if (availableTeams.length < tournament.teamsCount) {
       showError(`Esta liga não tem ${tournament.teamsCount} times!`);
       return;
     }
@@ -1242,7 +1472,7 @@ window.openDrawModal = async function(tournamentId) {
       <h2 style="text-align: center; margin-bottom: 20px; color: var(--accent);">🎲 Sorteio: ${tournament.name}</h2>
       
       <div class="draw-teams-container">
-        ${leagueTeams.slice(0, tournament.teamsCount).map(team => `
+        ${availableTeams.slice(0, tournament.teamsCount).map(team => `
           <div class="draw-team-item">
             <h4>⚽ ${team.name}</h4>
             <p>${team.leagueName}</p>
@@ -1266,7 +1496,8 @@ window.openDrawModal = async function(tournamentId) {
 window.performDraw = async function(tournamentId, teamsCount) {
   try {
     const tournament = tournaments.find(t => t.id === tournamentId);
-    const leagueTeams = teams.filter(t => t.leagueId === tournament.leagueId);
+    const selectedLeagueIds = tournament.selectedLeagues.map(l => l.id);
+    const leagueTeams = teams.filter(t => selectedLeagueIds.includes(t.leagueId));
     
     const shuffled = [...leagueTeams.slice(0, teamsCount)].sort(() => Math.random() - 0.5);
     
@@ -1317,13 +1548,15 @@ function updateTournamentsUI() {
       "finished": "✅ Finalizado"
     };
 
+    const leaguesText = tournament.selectedLeagues?.map(l => l.name).join(", ") || "Ligas";
+
     return `
       <div class="card tournament-card">
         <div class="tournament-status ${tournament.status}">${statusText[tournament.status]}</div>
         <h3>🏅 ${tournament.name}</h3>
         
         <div class="tournament-info">
-          <p>📍 <strong>Liga:</strong> ${tournament.leagueName}</p>
+          <p>📍 <strong>Ligas:</strong> ${leaguesText}</p>
           <p>👥 <strong>Times:</strong> ${tournament.selectedTeams?.length || 0}/${tournament.teamsCount}</p>
           ${tournament.description ? `<p>📝 ${tournament.description}</p>` : ''}
         </div>
@@ -1339,114 +1572,61 @@ function updateTournamentsUI() {
   }).join("");
 }
 
-// ===== INTERFACE =====
-window.showSection = function(sectionId, event) {
-  if (event) {
-    event.preventDefault();
-  }
-  
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById(sectionId).classList.add('active');
-  
-  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-  if (event && event.target) {
-    event.target.classList.add('active');
-  }
+// ===== ESTATÍSTICAS AVANÇADAS =====
+window.getTeamStats = function(teamId) {
+  const team = teams.find(t => t.id === teamId);
+  if (!team) return null;
 
-  if (sectionId === 'chat') {
-    loadConversations();
-  }
+  const teamMatches = matches.filter(m => m.homeId === teamId || m.awayId === teamId);
+  const winRate = teamMatches.length > 0 ? ((team.wins / teamMatches.length) * 100).toFixed(1) : 0;
+  const goalAverage = teamMatches.length > 0 ? (team.goalsFor / teamMatches.length).toFixed(2) : 0;
 
-  if (sectionId === 'tournaments') {
-    loadTournaments();
-  }
-
-  closeSidebar();
+  return {
+    matches: teamMatches.length,
+    winRate,
+    goalAverage,
+    goalDifference: team.goalsFor - team.goalsAgainst
+  };
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  initTheme();
-  
-  const leagueSelect = document.getElementById("leagueSelect");
-  const matchLeagueSelect = document.getElementById("matchLeagueSelect");
-  const rankingFilter = document.getElementById("rankingLeagueFilter");
-  const bioInput = document.getElementById("bioInput");
+window.showTeamStatistics = function(teamId) {
+  const team = teams.find(t => t.id === teamId);
+  const stats = getTeamStats(teamId);
 
-  if (leagueSelect) {
-    leagueSelect.addEventListener('change', updateTeamsUI);
-  }
-
-  if (matchLeagueSelect) {
-    matchLeagueSelect.addEventListener('change', updateMatchTeamsUI);
-  }
-
-  if (rankingFilter) {
-    rankingFilter.addEventListener('change', updateRanking);
-  }
-
-  if (bioInput) {
-    bioInput.addEventListener('input', () => {
-      document.getElementById("bioCounter").innerText = `${bioInput.value.length}/200`;
-    });
-  }
-});
-
-function updateTeamsUI() {
-  const leagueId = document.getElementById("leagueSelect").value;
-  const list = document.getElementById("teamsList");
-
-  if (!leagueId) {
-    list.innerHTML = '<p class="empty-state">Selecione uma liga para ver os times</p>';
+  if (!stats) {
+    showError("Time não encontrado!");
     return;
   }
 
-  const leagueTeams = teams.filter(t => t.leagueId === leagueId);
-
-  if (leagueTeams.length === 0) {
-    list.innerHTML = '<p class="empty-state">Nenhum time nesta liga</p>';
-    return;
-  }
-
-  list.innerHTML = leagueTeams.map(team => {
-    const badges = getBadges(team.id);
-    const badgesHtml = badges.map(b => `<span class="badge">${b}</span>`).join('');
-
-    return `
-      <div class="card team-card">
-        <h3>${team.name}</h3>
-        <div class="team-stats">
-          <p>🏆 ${team.points} pontos</p>
-          <p>✅ ${team.wins}V | 🤝 ${team.draws}E | ❌ ${team.losses}D</p>
-          <p>⚽ ${team.goalsFor} - ${team.goalsAgainst}</p>
-        </div>
-        <div>${badgesHtml}</div>
-        <button onclick="showTeamStatistics('${team.id}')" class="btn-secondary" style="margin-top: 12px; width: 100%;">📊 Ver Estatísticas</button>
-        <button onclick="deleteTeam('${team.id}')" class="btn-delete" style="margin-top: 8px; width: 100%;">🗑️ Deletar</button>
+  const statsHtml = `
+    <div class="stats-modal">
+      <h3>${team.name}</h3>
+      <div class="stat-item">
+        <span>Partidas Jogadas:</span>
+        <strong>${stats.matches}</strong>
       </div>
-    `;
-  }).join("");
-}
+      <div class="stat-item">
+        <span>Taxa de Vitória:</span>
+        <strong>${stats.winRate}%</strong>
+      </div>
+      <div class="stat-item">
+        <span>Média de Gols:</span>
+        <strong>${stats.goalAverage}</strong>
+      </div>
+      <div class="stat-item">
+        <span>Saldo de Gols:</span>
+        <strong>${stats.goalDifference > 0 ? '+' : ''}${stats.goalDifference}</strong>
+      </div>
+    </div>
+  `;
 
-function updateMatchTeamsUI() {
-  const leagueId = document.getElementById("matchLeagueSelect").value;
-  const homeSelect = document.getElementById("homeTeam");
-  const awaySelect = document.getElementById("awayTeam");
+  const modal = document.getElementById("userProfileModal");
+  const modalContent = modal.querySelector(".modal-content");
+  modalContent.innerHTML = statsHtml + '<button class="btn-primary" onclick="closeUserModal()" style="margin-top: 20px; width: 100%;">Fechar</button>';
+  modal.style.display = "flex";
+};
 
-  homeSelect.innerHTML = '<option value="">Selecione um time</option>';
-  awaySelect.innerHTML = '<option value="">Selecione um time</option>';
-
-  if (!leagueId) {
-    return;
-  }
-
-  const leagueTeams = teams.filter(t => t.leagueId === leagueId);
-
-  leagueTeams.forEach(team => {
-    homeSelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
-    awaySelect.innerHTML += `<option value="${team.id}">${team.name}</option>`;
-  });
-}
-
+// ===== RANKING =====
 function updateRanking() {
   const table = document.getElementById("rankingTable");
   const leagueFilter = document.getElementById("rankingLeagueFilter").value;
@@ -1501,6 +1681,72 @@ function updateRanking() {
   `).join("");
 }
 
+// Atualizar select de adversários no ranking
+window.updateRankingOpponentSelect = function() {
+  const select = document.getElementById("rankingOpponentSelect");
+  const modeSelect = document.getElementById("rankingModeSelect");
+
+  if (!select || !modeSelect) return;
+
+  if (modeSelect.value === "opponent") {
+    select.style.display = "block";
+
+    if (!userProfile?.following || userProfile.following.length === 0) {
+      select.innerHTML = '<option value="">Nenhum adversário seguido</option>';
+      return;
+    }
+
+    select.innerHTML = '<option value="">Selecione um Adversário</option>';
+
+    userProfile.following.forEach(userId => {
+      const user = users.find(u => u.uid === userId);
+      if (user) {
+        select.innerHTML += `<option value="${user.uid}">${user.displayUsername} (@${user.username})</option>`;
+      }
+    });
+  } else {
+    select.style.display = "none";
+  }
+};
+
+// ===== EQUIPE E UI =====
+function updateTeamsUI() {
+  const leagueId = document.getElementById("leagueSelect").value;
+  const list = document.getElementById("teamsList");
+
+  if (!leagueId) {
+    list.innerHTML = '<p class="empty-state">Selecione uma liga para ver os times</p>';
+    return;
+  }
+
+  const leagueTeams = teams.filter(t => t.leagueId === leagueId);
+
+  if (leagueTeams.length === 0) {
+    list.innerHTML = '<p class="empty-state">Nenhum time nesta liga</p>';
+    return;
+  }
+
+  list.innerHTML = leagueTeams.map(team => {
+    const badges = getBadges(team.id);
+    const badgesHtml = badges.map(b => `<span class="badge">${b}</span>`).join('');
+
+    return `
+      <div class="card team-card">
+        <h3>${team.name}</h3>
+        <div class="team-stats">
+          <p>🏆 ${team.points} pontos</p>
+          <p>✅ ${team.wins}V | 🤝 ${team.draws}E | ❌ ${team.losses}D</p>
+          <p>⚽ ${team.goalsFor} - ${team.goalsAgainst}</p>
+        </div>
+        <div>${badgesHtml}</div>
+        <button onclick="showTeamStatistics('${team.id}')" class="btn-secondary" style="margin-top: 12px; width: 100%;">📊 Ver Estatísticas</button>
+        <button onclick="deleteTeam('${team.id}')" class="btn-delete" style="margin-top: 8px; width: 100%;">🗑️ Deletar</button>
+      </div>
+    `;
+  }).join("");
+}
+
+// ===== DASHBOARD =====
 function updateDashboard() {
   const totalLeagues = leagues.length;
   const totalTeams = teams.length;
@@ -1514,6 +1760,31 @@ function updateDashboard() {
 function updateUI() {
   updateMatchesList();
 }
+
+// ===== INTERFACE =====
+window.showSection = function(sectionId, event) {
+  if (event) {
+    event.preventDefault();
+  }
+  
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(sectionId).classList.add('active');
+  
+  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+  if (event && event.target) {
+    event.target.classList.add('active');
+  }
+
+  if (sectionId === 'chat') {
+    loadConversations();
+  }
+
+  if (sectionId === 'tournaments') {
+    loadTournaments();
+  }
+
+  closeSidebar();
+};
 
 // ===== SIDEBAR MOBILE =====
 window.toggleSidebar = function() {
@@ -1623,383 +1894,6 @@ function formatTime(dateString) {
   });
 }
 
-console.log("✅ app.js carregado com sucesso!");
-// ===== NOTIFICAÇÕES =====
-let notificationQueue = [];
-
-window.createNotification = function(type, message, duration = 5000) {
-  const notification = {
-    id: Date.now(),
-    type: type, // 'success', 'error', 'info', 'warning'
-    message: message,
-    duration: duration
-  };
-
-  notificationQueue.push(notification);
-  displayNotification(notification);
-};
-
-function displayNotification(notification) {
-  const container = document.getElementById('notificationContainer') || createNotificationContainer();
-  
-  const notif = document.createElement('div');
-  notif.className = `notification notification-${notification.type}`;
-  notif.id = `notif-${notification.id}`;
-  notif.innerHTML = `
-    <div class="notification-content">
-      <span>${notification.message}</span>
-      <button class="notification-close" onclick="removeNotification(${notification.id})">✕</button>
-    </div>
-  `;
-
-  container.appendChild(notif);
-
-  setTimeout(() => {
-    removeNotification(notification.id);
-  }, notification.duration);
-}
-
-function createNotificationContainer() {
-  const container = document.createElement('div');
-  container.id = 'notificationContainer';
-  container.className = 'notification-container';
-  document.body.appendChild(container);
-  return container;
-}
-
-window.removeNotification = function(id) {
-  const notif = document.getElementById(`notif-${id}`);
-  if (notif) {
-    notif.classList.add('fade-out');
-    setTimeout(() => notif.remove(), 300);
-  }
-  notificationQueue = notificationQueue.filter(n => n.id !== id);
-};
-
-// ===== BUSCAS AVANÇADAS =====
-window.advancedMatchSearch = function() {
-  const leagueFilter = document.getElementById("searchLeague")?.value || '';
-  const resultFilter = document.getElementById("searchResult")?.value || '';
-  const periodFilter = document.getElementById("searchPeriod")?.value || '30days';
-
-  let filtered = matches;
-
-  // Filtrar por liga
-  if (leagueFilter) {
-    filtered = filtered.filter(m => m.leagueId === leagueFilter);
-  }
-
-  // Filtrar por resultado
-  if (resultFilter) {
-    filtered = filtered.filter(m => {
-      if (resultFilter === 'win') return m.homeGoals > m.awayGoals;
-      if (resultFilter === 'draw') return m.homeGoals === m.awayGoals;
-      if (resultFilter === 'loss') return m.homeGoals < m.awayGoals;
-    });
-  }
-
-  // Filtrar por período
-  const now = new Date();
-  if (periodFilter !== 'all') {
-    filtered = filtered.filter(m => {
-      const matchDate = new Date(m.date);
-      const daysAgo = (now - matchDate) / (1000 * 60 * 60 * 24);
-      
-      if (periodFilter === '7days') return daysAgo <= 7;
-      if (periodFilter === '30days') return daysAgo <= 30;
-      if (periodFilter === '90days') return daysAgo <= 90;
-      return true;
-    });
-  }
-
-  displaySearchResults(filtered);
-};
-
-function displaySearchResults(filtered) {
-  const list = document.getElementById("matchesList");
-  
-  if (filtered.length === 0) {
-    list.innerHTML = '<p class="empty-state">Nenhuma partida encontrada com esses critérios</p>';
-    return;
-  }
-
-  list.innerHTML = filtered.map(match => `
-    <div class="card match-card">
-      <div class="match-teams">
-        <strong>${match.homeTeam}</strong>
-        <div class="match-result">${match.homeGoals} × ${match.awayGoals}</div>
-        <strong>${match.awayTeam}</strong>
-        <div class="match-date">${formatDate(match.date)}</div>
-      </div>
-    </div>
-  `).join("");
-}
-
-// ===== HISTÓRICO DE CHAT PESQUISÁVEL =====
-window.searchChatMessages = function() {
-  if (!selectedChatUserId) {
-    showError("Selecione uma conversa primeiro!");
-    return;
-  }
-
-  const searchTerm = document.getElementById("chatSearchInput")?.value.toLowerCase() || '';
-  
-  if (!searchTerm) {
-    loadChatMessages();
-    return;
-  }
-
-  const conversationId = [currentUser.uid, selectedChatUserId].sort().join("_");
-  
-  // Aqui você precisaria implementar uma busca no Firestore
-  // Por enquanto, filtra localmente
-  console.log("🔍 Buscando mensagens com:", searchTerm);
-  showToast("🔍 Buscando mensagens...");
-};
-
-// ===== SISTEMA DE RANKING COMPARATIVO =====
-window.compareTeams = function(teamId1, teamId2) {
-  const team1 = teams.find(t => t.id === teamId1);
-  const team2 = teams.find(t => t.id === teamId2);
-
-  if (!team1 || !team2) {
-    showError("Times não encontrados!");
-    return;
-  }
-
-  const stats1 = getTeamStats(teamId1);
-  const stats2 = getTeamStats(teamId2);
-
-  const comparisonHtml = `
-    <div class="comparison-modal">
-      <h2>⚖️ Comparação de Times</h2>
-      
-      <div class="comparison-container">
-        <div class="comparison-team">
-          <h3>${team1.name}</h3>
-          <div class="comp-stat">
-            <span>Pontos:</span>
-            <strong>${team1.points}</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Vitórias:</span>
-            <strong>${team1.wins}</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Taxa de Vitória:</span>
-            <strong>${stats1.winRate}%</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Média de Gols:</span>
-            <strong>${stats1.goalAverage}</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Saldo:</span>
-            <strong class="${stats1.goalDifference > 0 ? 'positive' : 'negative'}">${stats1.goalDifference > 0 ? '+' : ''}${stats1.goalDifference}</strong>
-          </div>
-        </div>
-
-        <div class="vs-divider">VS</div>
-
-        <div class="comparison-team">
-          <h3>${team2.name}</h3>
-          <div class="comp-stat">
-            <span>Pontos:</span>
-            <strong>${team2.points}</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Vitórias:</span>
-            <strong>${team2.wins}</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Taxa de Vitória:</span>
-            <strong>${stats2.winRate}%</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Média de Gols:</span>
-            <strong>${stats2.goalAverage}</strong>
-          </div>
-          <div class="comp-stat">
-            <span>Saldo:</span>
-            <strong class="${stats2.goalDifference > 0 ? 'positive' : 'negative'}">${stats2.goalDifference > 0 ? '+' : ''}${stats2.goalDifference}</strong>
-          </div>
-        </div>
-      </div>
-
-      <button class="btn-primary" onclick="closeUserModal()" style="width: 100%; margin-top: 20px;">Fechar</button>
-    </div>
-  `;
-
-  const modal = document.getElementById("userProfileModal");
-  const modalContent = modal.querySelector(".modal-content");
-  modalContent.innerHTML = comparisonHtml;
-  modal.style.display = "flex";
-};
-
-// ===== HISTÓRICO COMPLETO DE PARTIDAS =====
-window.getMatchHistory = function(teamId) {
-  const team = teams.find(t => t.id === teamId);
-  if (!team) return [];
-
-  return matches.filter(m => m.homeId === teamId || m.awayId === teamId)
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
-};
-
-window.showMatchHistory = function(teamId) {
-  const team = teams.find(t => t.id === teamId);
-  const history = getMatchHistory(teamId);
-
-  if (history.length === 0) {
-    showError("Nenhuma partida encontrada!");
-    return;
-  }
-
-  let historyHtml = `
-    <div class="history-modal">
-      <h3>📜 Histórico: ${team.name}</h3>
-      <div class="history-list">
-  `;
-
-  history.forEach((match, index) => {
-    const isHome = match.homeId === teamId;
-    const opponent = isHome ? match.awayTeam : match.homeTeam;
-    const goals = isHome ? match.homeGoals : match.awayGoals;
-    const opponentGoals = isHome ? match.awayGoals : match.homeGoals;
-    const result = goals > opponentGoals ? 'Vitória' : goals < opponentGoals ? 'Derrota' : 'Empate';
-    const resultEmoji = goals > opponentGoals ? '✅' : goals < opponentGoals ? '❌' : '🤝';
-
-    historyHtml += `
-      <div class="history-item">
-        <div class="history-date">${formatDate(match.date)}</div>
-        <div class="history-match">
-          <div class="history-opponent">${opponent}</div>
-          <div class="history-score">${goals} × ${opponentGoals}</div>
-          <div class="history-result ${result.toLowerCase()}">${resultEmoji} ${result}</div>
-        </div>
-      </div>
-    `;
-  });
-
-  historyHtml += `
-      </div>
-      <button class="btn-primary" onclick="closeUserModal()" style="width: 100%; margin-top: 20px;">Fechar</button>
-    </div>
-  `;
-
-  const modal = document.getElementById("userProfileModal");
-  const modalContent = modal.querySelector(".modal-content");
-  modalContent.innerHTML = historyHtml;
-  modal.style.display = "flex";
-};
-
-// ===== SEQUÊNCIA DE RESULTADOS =====
-window.getWinStreak = function(teamId) {
-  const history = getMatchHistory(teamId);
-  if (history.length === 0) return 0;
-
-  let streak = 0;
-  for (let match of history) {
-    const isHome = match.homeId === teamId;
-    const goals = isHome ? match.homeGoals : match.awayGoals;
-    const opponentGoals = isHome ? match.awayGoals : match.homeGoals;
-
-    if (goals > opponentGoals) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-  return streak;
-};
-
-// ===== MELHOR DESEMPENHO EM CASA/FORA =====
-window.getHomeAwayStats = function(teamId) {
-  const teamMatches = matches.filter(m => m.homeId === teamId || m.awayId === teamId);
-
-  const homeMatches = teamMatches.filter(m => m.homeId === teamId);
-  const awayMatches = teamMatches.filter(m => m.awayId === teamId);
-
-  const homeWins = homeMatches.filter(m => m.homeGoals > m.awayGoals).length;
-  const awayWins = awayMatches.filter(m => m.awayGoals > m.homeGoals).length;
-
-  return {
-    home: {
-      played: homeMatches.length,
-      wins: homeWins,
-      winRate: homeMatches.length > 0 ? ((homeWins / homeMatches.length) * 100).toFixed(1) : 0,
-      goalsFor: homeMatches.reduce((sum, m) => sum + m.homeGoals, 0),
-      goalsAgainst: homeMatches.reduce((sum, m) => sum + m.awayGoals, 0)
-    },
-    away: {
-      played: awayMatches.length,
-      wins: awayWins,
-      winRate: awayMatches.length > 0 ? ((awayWins / awayMatches.length) * 100).toFixed(1) : 0,
-      goalsFor: awayMatches.reduce((sum, m) => sum + m.awayGoals, 0),
-      goalsAgainst: awayMatches.reduce((sum, m) => sum + m.homeGoals, 0)
-    }
-  };
-};
-
-window.showHomeAwayStats = function(teamId) {
-  const team = teams.find(t => t.id === teamId);
-  const stats = getHomeAwayStats(teamId);
-
-  const statsHtml = `
-    <div class="home-away-stats">
-      <h3>🏟️ Desempenho ${team.name}</h3>
-      
-      <div class="stats-comparison">
-        <div class="stat-box">
-          <h4>🏠 Em Casa</h4>
-          <div class="stat-row">
-            <span>Partidas:</span>
-            <strong>${stats.home.played}</strong>
-          </div>
-          <div class="stat-row">
-            <span>Vitórias:</span>
-            <strong>${stats.home.wins}</strong>
-          </div>
-          <div class="stat-row">
-            <span>Taxa:</span>
-            <strong>${stats.home.winRate}%</strong>
-          </div>
-          <div class="stat-row">
-            <span>Gols Pro/Contra:</span>
-            <strong>${stats.home.goalsFor}/${stats.home.goalsAgainst}</strong>
-          </div>
-        </div>
-
-        <div class="stat-box">
-          <h4>⚽ Fora de Casa</h4>
-          <div class="stat-row">
-            <span>Partidas:</span>
-            <strong>${stats.away.played}</strong>
-          </div>
-          <div class="stat-row">
-            <span>Vitórias:</span>
-            <strong>${stats.away.wins}</strong>
-          </div>
-          <div class="stat-row">
-            <span>Taxa:</span>
-            <strong>${stats.away.winRate}%</strong>
-          </div>
-          <div class="stat-row">
-            <span>Gols Pro/Contra:</span>
-            <strong>${stats.away.goalsFor}/${stats.away.goalsAgainst}</strong>
-          </div>
-        </div>
-      </div>
-
-      <button class="btn-primary" onclick="closeUserModal()" style="width: 100%; margin-top: 20px;">Fechar</button>
-    </div>
-  `;
-
-  const modal = document.getElementById("userProfileModal");
-  const modalContent = modal.querySelector(".modal-content");
-  modalContent.innerHTML = statsHtml;
-  modal.style.display = "flex";
-};
-
 // ===== MELHORES ATACANTES/DEFESAS =====
 window.getTeamRankings = function() {
   const rankings = {
@@ -2065,82 +1959,6 @@ window.showTeamRankings = function() {
   const modalContent = modal.querySelector(".modal-content");
   modalContent.innerHTML = html;
   modal.style.display = "flex";
-};
-
-// ===== COMPARTILHAMENTO DE RESULTADOS =====
-window.shareMatchResult = function(matchId) {
-  const match = matches.find(m => m.id === matchId);
-  if (!match) return;
-
-  const text = `🎉 ${match.homeTeam} ${match.homeGoals} × ${match.awayGoals} ${match.awayTeam}`;
-  const url = window.location.href;
-
-  if (navigator.share) {
-    navigator.share({
-      title: 'Victory Tracker - Resultado',
-      text: text,
-      url: url
-    }).catch(err => console.log('Erro ao compartilhar:', err));
-  } else {
-    // Fallback: copiar para clipboard
-    const shareText = `${text}\n${url}`;
-    navigator.clipboard.writeText(shareText).then(() => {
-      showToast("📋 Resultado copiado para clipboard!");
-    });
-  }
-};
-
-// ===== GERADOR DE IMAGEM DO RESULTADO =====
-window.generateMatchImage = function(matchId) {
-  const match = matches.find(m => m.id === matchId);
-  if (!match) return;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 800;
-  canvas.height = 400;
-
-  const ctx = canvas.getContext('2d');
-
-  // Background
-  const gradient = ctx.createLinearGradient(0, 0, 800, 400);
-  gradient.addColorStop(0, '#0a1628');
-  gradient.addColorStop(1, '#142d45');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 800, 400);
-
-  // Title
-  ctx.fillStyle = '#00d4ff';
-  ctx.font = 'bold 48px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('⚽ RESULTADO ⚽', 400, 80);
-
-  // Teams and score
-  ctx.font = 'bold 72px Arial';
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'right';
-  ctx.fillText(match.homeTeam, 280, 250);
-  
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#00d4ff';
-  ctx.fillText(match.homeGoals + ' × ' + match.awayGoals, 400, 250);
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(match.awayTeam, 520, 250);
-
-  // Date
-  ctx.font = '24px Arial';
-  ctx.fillStyle = '#b0bec5';
-  ctx.textAlign = 'center';
-  ctx.fillText(formatDate(match.date), 400, 350);
-
-  // Download
-  const link = document.createElement('a');
-  link.href = canvas.toDataURL();
-  link.download = `resultado-${match.homeTeam}-vs-${match.awayTeam}.png`;
-  link.click();
-
-  showToast("📸 Imagem gerada e baixada!");
 };
 
 // ===== ESTATÍSTICAS GERAIS =====
@@ -2215,55 +2033,33 @@ window.showGeneralStats = function() {
   modal.style.display = "flex";
 };
 
-// ===== SINCRONIZAÇÃO EM TEMPO REAL =====
-window.setupRealtimeSync = function() {
-  // Sincronizar ligas em tempo real
-  onSnapshot(query(collection(db, "leagues")), (snapshot) => {
-    leagues = [];
-    snapshot.forEach((doc) => {
-      leagues.push({ id: doc.id, ...doc.data() });
+// ===== DOCUMENT READY =====
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  
+  const leagueSelect = document.getElementById("leagueSelect");
+  const homeLeagueSelect = document.getElementById("homeLeagueSelect");
+  const bioInput = document.getElementById("bioInput");
+
+  if (leagueSelect) {
+    leagueSelect.addEventListener('change', updateTeamsUI);
+  }
+
+  if (homeLeagueSelect) {
+    homeLeagueSelect.addEventListener('change', updateHomeTeamsUI);
+  }
+
+  if (bioInput) {
+    bioInput.addEventListener('input', () => {
+      document.getElementById("bioCounter").innerText = `${bioInput.value.length}/200`;
     });
+  }
+
+  setTimeout(() => {
+    updateOpponentSelect();
+    updateRankingOpponentSelect();
     updateLeagueSelects();
-    updateLeaguesList();
-  });
+  }, 1000);
+});
 
-  // Sincronizar times em tempo real
-  onSnapshot(query(collection(db, "teams")), (snapshot) => {
-    teams = [];
-    snapshot.forEach((doc) => {
-      teams.push({ id: doc.id, ...doc.data() });
-    });
-    updateUI();
-    updateRanking();
-  });
-
-  console.log("✅ Sincronização em tempo real ativada!");
-};
-
-// ===== FAVORITOS =====
-window.toggleFavoriteTeam = function(teamId) {
-  if (!userProfile.favorites) {
-    userProfile.favorites = [];
-  }
-
-  const isFavorite = userProfile.favorites.includes(teamId);
-
-  if (isFavorite) {
-    userProfile.favorites = userProfile.favorites.filter(id => id !== teamId);
-  } else {
-    userProfile.favorites.push(teamId);
-  }
-
-  updateDoc(doc(db, "userProfiles", userProfile.id), {
-    favorites: userProfile.favorites
-  }).then(() => {
-    showToast(isFavorite ? "❌ Removido de favoritos" : "⭐ Adicionado aos favoritos!");
-  });
-};
-
-window.getFavoriteTeams = function() {
-  if (!userProfile.favorites) return [];
-  return teams.filter(t => userProfile.favorites.includes(t.id));
-};
-
-console.log("✅ PARTE 2 app.js carregada com sucesso!");
+console.log("✅ app.js carregado com sucesso!");

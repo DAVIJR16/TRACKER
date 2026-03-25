@@ -1311,7 +1311,13 @@ window.getBadges = function(teamId) {
   return badges;
 };
 
-// ===== TORNEIOS =====
+// ===== TORNEIOS - NOVA VERSÃO COM GRUPOS =====
+
+// Variável para armazenar torneio em andamento
+let currentTournament = null;
+let currentMatch = null;
+let currentGroupMatches = [];
+
 async function loadTournaments() {
   try {
     const querySnapshot = await getDocs(
@@ -1323,10 +1329,84 @@ async function loadTournaments() {
     });
     updateTournamentsUI();
     updateTournamentLeaguesCheckboxes();
+    updateOpponentsListUI();
   } catch (error) {
     console.error("❌ Erro ao carregar torneios:", error);
   }
 }
+
+window.showTournamentTab = function(tab) {
+  document.getElementById("createTournamentTab").style.display = "none";
+  document.getElementById("browseTournamentsTab").style.display = "none";
+  document.getElementById("myTournamentsTab").style.display = "none";
+
+  document.getElementById("tabCreate").classList.remove("active");
+  document.getElementById("tabBrowse").classList.remove("active");
+  document.getElementById("tabMyTournaments").classList.remove("active");
+
+  if (tab === "create") {
+    document.getElementById("createTournamentTab").style.display = "block";
+    document.getElementById("tabCreate").classList.add("active");
+  } else if (tab === "browse") {
+    document.getElementById("browseTournamentsTab").style.display = "block";
+    document.getElementById("tabBrowse").classList.add("active");
+    updateBrowseTournaments();
+  } else if (tab === "myTournaments") {
+    document.getElementById("myTournamentsTab").style.display = "block";
+    document.getElementById("tabMyTournaments").classList.add("active");
+    updateMyTournaments();
+  }
+};
+
+window.toggleOpponentsList = function() {
+  const container = document.getElementById("opponentsListContainer");
+  const checkbox = document.getElementById("enableOpponents");
+  container.style.display = checkbox.checked ? "block" : "none";
+};
+
+function updateOpponentsListUI() {
+  const select = document.getElementById("tournamentOpponents");
+  if (!select) return;
+
+  select.innerHTML = '';
+  
+  if (!userProfile?.following || userProfile.following.length === 0) {
+    select.innerHTML = '<option>Nenhum adversário seguido</option>';
+    return;
+  }
+
+  userProfile.following.forEach(userId => {
+    const user = users.find(u => u.uid === userId);
+    if (user) {
+      const option = document.createElement('option');
+      option.value = user.uid;
+      option.textContent = `${user.displayUsername} (@${user.username})`;
+      select.appendChild(option);
+    }
+  });
+}
+
+window.updateGroupsInfo = function() {
+  const format = document.getElementById("tournamentFormat").value;
+  const teamsCount = parseInt(document.getElementById("tournamentMaxTeamsCount").value) || 8;
+  const groupsConfig = document.getElementById("groupsConfig");
+  const groupsInfo = document.getElementById("groupsInfo");
+
+  if (format === "groups") {
+    groupsConfig.style.display = "block";
+    
+    // Calcular grupos automaticamente
+    let numGroups = 4; // Padrão Copa do Mundo
+    if (teamsCount <= 8) numGroups = 2;
+    else if (teamsCount <= 16) numGroups = 4;
+    else if (teamsCount <= 32) numGroups = 8;
+
+    const teamsPerGroup = Math.ceil(teamsCount / numGroups);
+    groupsInfo.value = `${numGroups} grupos com até ${teamsPerGroup} times cada`;
+  } else {
+    groupsConfig.style.display = "none";
+  }
+};
 
 function updateTournamentLeaguesCheckboxes() {
   const container = document.getElementById("tournamentLeaguesContainer");
@@ -1356,16 +1436,59 @@ window.updateTournamentTeamsUI = function() {
   document.getElementById("tournamentTeamsCount").innerText = `Times disponíveis: ${totalTeams}`;
 };
 
+// Função para criar grupos (estilo Copa do Mundo)
+function createGroups(teamsList, numGroups) {
+  const groups = {};
+  
+  // Embaralhar times
+  const shuffled = [...teamsList].sort(() => Math.random() - 0.5);
+  
+  // Distribuir em grupos
+  for (let i = 0; i < numGroups; i++) {
+    groups[`Grupo ${String.fromCharCode(65 + i)}`] = [];
+  }
+  
+  shuffled.forEach((team, index) => {
+    const groupIndex = index % numGroups;
+    const groupKey = `Grupo ${String.fromCharCode(65 + groupIndex)}`;
+    groups[groupKey].push(team);
+  });
+
+  return groups;
+}
+
+// Função para criar partidas de grupo (todos x todos)
+function createGroupMatches(groupTeams) {
+  const matches = [];
+  
+  for (let i = 0; i < groupTeams.length; i++) {
+    for (let j = i + 1; j < groupTeams.length; j++) {
+      matches.push({
+        homeTeam: groupTeams[i],
+        awayTeam: groupTeams[j],
+        homeGoals: null,
+        awayGoals: null,
+        status: "pending"
+      });
+    }
+  }
+  
+  return matches;
+}
+
 window.createTournament = async function() {
   try {
     const name = document.getElementById("tournamentName").value.trim();
     const format = document.getElementById("tournamentFormat").value;
-    const system = document.getElementById("tournamentSystem").value;
-    const teamsCount = parseInt(document.getElementById("tournamentMaxTeamsCount").value) || 4;
+    const teamsCount = parseInt(document.getElementById("tournamentMaxTeamsCount").value) || 8;
     const description = document.getElementById("tournamentDescription").value.trim();
 
     const checkboxes = document.querySelectorAll(".tournament-league-checkbox:checked");
     const selectedLeagues = Array.from(checkboxes).map(cb => cb.value);
+
+    // Obter adversários selecionados
+    const opponentSelect = document.getElementById("tournamentOpponents");
+    const selectedOpponentIds = Array.from(opponentSelect.selectedOptions).map(o => o.value);
 
     if (!name) {
       showError("Digite o nome do torneio!");
@@ -1382,17 +1505,8 @@ window.createTournament = async function() {
       return;
     }
 
-    if (teamsCount < 2 || teamsCount > 32) {
-      showError("Quantidade de times deve ser entre 2 e 32!");
-      return;
-    }
-
-    const tournamentExists = tournaments.some(
-      t => t.name.toLowerCase() === name.toLowerCase() && t.status === "pending"
-    );
-
-    if (tournamentExists) {
-      showError("Já existe um torneio com este nome!");
+    if (teamsCount < 2 || teamsCount > 64) {
+      showError("Quantidade de times deve ser entre 2 e 64!");
       return;
     }
 
@@ -1401,42 +1515,500 @@ window.createTournament = async function() {
       return { id: leagueId, name: league.name };
     });
 
-    const tournamentTeams = teams.filter(t => selectedLeagues.includes(t.leagueId));
+    // Obter times das ligas selecionadas
+    let tournamentTeams = teams.filter(t => selectedLeagues.includes(t.leagueId));
 
     if (tournamentTeams.length < teamsCount) {
       showError(`Não há ${teamsCount} times nas ligas selecionadas! Há apenas ${tournamentTeams.length} times.`);
       return;
     }
 
-    await addDoc(collection(db, "tournaments"), {
+    // Criar um mapa de adversários para fácil acesso
+    const opponentMap = {};
+    selectedOpponentIds.forEach(opId => {
+      const opponent = users.find(u => u.uid === opId);
+      if (opponent) {
+        opponentMap[opId] = opponent;
+      }
+    });
+
+    // Selecionar times aleatórios do seu próprio time
+    const yourTeams = tournamentTeams.sort(() => Math.random() - 0.5).slice(0, teamsCount);
+
+    // Preparar dados dos times com informações de adversários
+    const selectedTeamsData = yourTeams.map((team, index) => {
+      let opponentId = null;
+      let opponentData = null;
+
+      // Distribuir adversários selecionados entre os times
+      if (selectedOpponentIds.length > 0) {
+        const opponentIndex = index % selectedOpponentIds.length;
+        opponentId = selectedOpponentIds[opponentIndex];
+        opponentData = opponentMap[opponentId];
+      }
+
+      return {
+        id: team.id,
+        name: team.name,
+        leagueId: team.leagueId,
+        leagueName: team.leagueName,
+        opponentId: opponentId,
+        opponentName: opponentData?.displayUsername || null,
+        opponentUsername: opponentData?.username || null,
+        opponentAvatar: opponentData?.photoURL || null,
+        uid: currentUser.uid
+      };
+    });
+
+    let groups = {};
+    let allMatches = [];
+
+    if (format === "groups") {
+      // Criar grupos
+      let numGroups = 4;
+      if (teamsCount <= 8) numGroups = 2;
+      else if (teamsCount <= 16) numGroups = 4;
+      else if (teamsCount <= 32) numGroups = 8;
+
+      groups = createGroupsWithOpponents(selectedTeamsData, numGroups);
+
+      // Criar partidas para cada grupo
+      for (const groupName in groups) {
+        const groupTeams = groups[groupName];
+        const groupMatches = createGroupMatchesWithOpponents(groupTeams);
+        allMatches = [...allMatches, ...groupMatches.map(m => ({
+          ...m,
+          group: groupName
+        }))];
+      }
+    }
+
+    // Salvar torneio no Firestore
+    const tournamentRef = await addDoc(collection(db, "tournaments"), {
       name,
       selectedLeagues: selectedLeaguesData,
       format,
-      system,
       teamsCount,
       description,
-      status: "pending",
-      selectedTeams: [],
-      brackets: [],
-      winner: null,
+      status: "created",
+      selectedTeams: selectedTeamsData,
+      groups: Object.keys(groups).length > 0 ? groups : null,
+      matches: allMatches,
+      standings: {},
       createdAt: new Date().toISOString(),
-      createdBy: currentUser.uid
+      createdBy: currentUser.uid,
+      participants: [currentUser.uid],
+      selectedOpponentIds: selectedOpponentIds
     });
 
     document.getElementById("tournamentName").value = "";
-    document.getElementById("tournamentFormat").value = "single";
-    document.getElementById("tournamentSystem").value = "single";
-    document.getElementById("tournamentMaxTeamsCount").value = "4";
+    document.getElementById("tournamentFormat").value = "groups";
+    document.getElementById("tournamentMaxTeamsCount").value = "8";
     document.getElementById("tournamentDescription").value = "";
     document.querySelectorAll(".tournament-league-checkbox").forEach(cb => cb.checked = false);
+    opponentSelect.selectedIndex = -1;
 
     showToast("🏅 Torneio criado com sucesso!");
     loadTournaments();
+    showTournamentTab("myTournaments");
   } catch (error) {
     console.error("❌ Erro ao criar torneio:", error);
     showError("Erro ao criar torneio");
   }
 };
+  
+window.joinTournament = async function(tournamentId) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    
+    if (!tournament.participants) {
+      tournament.participants = [];
+    }
+
+    if (!tournament.participants.includes(currentUser.uid)) {
+      tournament.participants.push(currentUser.uid);
+      
+      await updateDoc(doc(db, "tournaments", tournamentId), {
+        participants: tournament.participants
+      });
+
+      showToast("✅ Você entrou no torneio!");
+      loadTournaments();
+    } else {
+      showError("Você já está no torneio!");
+    }
+  } catch (error) {
+    console.error("❌ Erro ao entrar no torneio:", error);
+    showError("Erro ao entrar no torneio");
+  }
+};
+
+window.startTournament = async function(tournamentId) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    
+    if (tournament.createdBy !== currentUser.uid) {
+      showError("Apenas o criador pode iniciar o torneio!");
+      return;
+    }
+
+    await updateDoc(doc(db, "tournaments", tournamentId), {
+      status: "started"
+    });
+
+    showToast("🎮 Torneio iniciado!");
+    currentTournament = tournament;
+    openTournamentView(tournamentId);
+    loadTournaments();
+  } catch (error) {
+    console.error("❌ Erro ao iniciar torneio:", error);
+    showError("Erro ao iniciar torneio");
+  }
+};
+
+window.openTournamentView = async function(tournamentId) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    
+    if (!tournament) {
+      showError("Torneio não encontrado!");
+      return;
+    }
+
+    currentTournament = tournament;
+
+    const modal = document.getElementById("userProfileModal");
+    const modalContent = modal.querySelector(".modal-content");
+
+    let html = `
+      <button class="modal-close" onclick="closeTournamentView()">✕</button>
+      <h2 style="text-align: center; margin-bottom: 20px; color: var(--accent);">🏅 ${tournament.name}</h2>
+      
+      <div style="margin-bottom: 20px; padding: 12px; background: rgba(0, 212, 255, 0.08); border-radius: 10px; border-left: 3px solid var(--accent);">
+        <p><strong>Status:</strong> ${tournament.status === "created" ? "⏳ Criado" : tournament.status === "started" ? "🎮 Em Andamento" : "✅ Finalizado"}</p>
+        <p><strong>Times:</strong> ${tournament.selectedTeams.length}</p>
+        <p><strong>Formato:</strong> ${tournament.format === "groups" ? "📍 Grupos" : "🏆 Eliminatória"}</p>
+      </div>
+    `;
+
+    if (tournament.format === "groups" && tournament.groups) {
+      html += `<h3 style="color: var(--accent); margin: 20px 0 12px 0;">📍 Grupos</h3>`;
+      
+      for (const groupName in tournament.groups) {
+        html += `
+          <div style="background: rgba(0, 212, 255, 0.08); padding: 12px; border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(0, 212, 255, 0.15);">
+            <h4 style="color: var(--accent); margin-bottom: 8px;">${groupName}</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              ${tournament.groups[groupName].map(team => `
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 8px; border-radius: 6px; font-size: 0.85rem;">
+                  ⚽ ${team.name}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    if (tournament.status === "created" && tournament.createdBy === currentUser.uid) {
+      html += `
+        <button onclick="startTournament('${tournamentId}')" class="btn-primary" style="width: 100%; margin-top: 20px;">
+          🎮 Começar Torneio
+        </button>
+      `;
+    }
+
+    if (tournament.status === "started" && tournament.participants.includes(currentUser.uid)) {
+      html += `
+        <button onclick="openGroupMatches('${tournamentId}')" class="btn-view" style="width: 100%; margin-top: 12px;">
+          ⚽ Ver Partidas do Grupo
+        </button>
+      `;
+    }
+
+    if (!tournament.participants.includes(currentUser.uid) && tournament.createdBy !== currentUser.uid) {
+      html += `
+        <button onclick="joinTournament('${tournamentId}')" class="btn-primary" style="width: 100%; margin-top: 20px;">
+          ✅ Entrar no Torneio
+        </button>
+      `;
+    }
+
+    html += `<button onclick="deleteTournament('${tournamentId}')" class="btn-delete-tournament" style="width: 100%; margin-top: 12px;">🗑️ Deletar Torneio</button>`;
+
+    modalContent.innerHTML = html;
+    modal.style.display = "flex";
+  } catch (error) {
+    console.error("❌ Erro ao abrir torneio:", error);
+    showError("Erro ao abrir torneio");
+  }
+};
+
+window.openGroupMatches = async function(tournamentId) {
+  try {
+    const tournament = tournaments.find(t => t.id === tournamentId);
+    
+    if (!tournament || !tournament.matches) {
+      showError("Torneio sem partidas!");
+      return;
+    }
+
+    currentMatch = tournament.matches.find(m => m.status === "pending");
+    
+    if (!currentMatch) {
+      showError("Todas as partidas já foram jogadas!");
+      return;
+    }
+
+    currentGroupMatches = tournament.matches;
+
+    const modal = document.getElementById("userProfileModal");
+    const modalContent = modal.querySelector(".modal-content");
+
+    const matchIndex = tournament.matches.findIndex(m => m === currentMatch);
+    const totalMatches = tournament.matches.length;
+    const finishedMatches = tournament.matches.filter(m => m.status === "finished").length;
+
+    const homeTeamInfo = currentMatch.homeTeam;
+    const awayTeamInfo = currentMatch.awayTeam;
+
+    // Obter nomes dos adversários
+    let homePlayerName = "MURALHA";
+    let awayPlayerName = awayTeamInfo.adversaryName || "HENRIQUE";
+
+    let html = `
+      <button class="modal-close" onclick="closeTournamentView()">✕</button>
+      
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: var(--accent); margin-bottom: 8px;">🏅 ${tournament.name}</h2>
+        <p style="color: var(--text-secondary); font-size: 0.9rem;">
+          ${currentMatch.group} • Partida ${matchIndex + 1} de ${totalMatches} (${finishedMatches} concluídas)
+        </p>
+      </div>
+
+      <!-- PROGRESSÃO DO TORNEIO -->
+      <div style="background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 10px; margin-bottom: 20px; border-left: 3px solid var(--accent);">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
+          <div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">TOTAL</p>
+            <p style="font-size: 1.3rem; color: var(--accent); font-weight: 700; margin: 0;">${totalMatches}</p>
+          </div>
+          <div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">CONCLUÍDAS</p>
+            <p style="font-size: 1.3rem; color: var(--success); font-weight: 700; margin: 0;">${finishedMatches}</p>
+          </div>
+          <div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">RESTANTES</p>
+            <p style="font-size: 1.3rem; color: var(--warning); font-weight: 700; margin: 0;">${totalMatches - finishedMatches}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- QUEM ESTÁ JOGANDO -->
+      <div style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(42, 82, 152, 0.1) 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(0, 212, 255, 0.2);">
+        <p style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; text-transform: uppercase; font-weight: 600;">👥 Jogadores</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-bottom: 20px;">
+          <!-- TIME DE CASA -->
+          <div style="background: rgba(255, 255, 255, 0.05); padding: 16px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.15); text-align: center;">
+            <p style="color: var(--accent); font-weight: 700; margin: 0 0 4px 0; font-size: 0.9rem;">🏠 CASA</p>
+            <p style="color: var(--text); font-weight: 600; margin: 0 0 8px 0; font-size: 1.1rem;">${homePlayerName}</p>
+            <p style="color: var(--text-secondary); margin: 0 0 8px 0; font-size: 0.85rem; font-weight: 600;">📍 ${homeTeamInfo.leagueName}</p>
+            <p style="color: var(--text-secondary); margin: 0; font-size: 0.85rem; font-weight: 600;">⚽ ${homeTeamInfo.name}</p>
+          </div>
+
+          <!-- VERSUS -->
+          <div style="text-align: center;">
+            <p style="color: var(--accent); font-size: 1.8rem; font-weight: bold; margin: 0;">⚔️</p>
+            <p style="color: var(--text-secondary); font-size: 0.7rem; margin: 8px 0 0 0; text-transform: uppercase; font-weight: 600;">VS</p>
+          </div>
+
+          <!-- TIME DE FORA -->
+          <div style="background: rgba(255, 255, 255, 0.05); padding: 16px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.15); text-align: center;">
+            <p style="color: var(--accent); font-weight: 700; margin: 0 0 4px 0; font-size: 0.9rem;">🏃 FORA</p>
+            <p style="color: var(--text); font-weight: 600; margin: 0 0 8px 0; font-size: 1.1rem;">${awayPlayerName}</p>
+            <p style="color: var(--text-secondary); margin: 0 0 8px 0; font-size: 0.85rem; font-weight: 600;">📍 ${awayTeamInfo.leagueName}</p>
+            <p style="color: var(--text-secondary); margin: 0; font-size: 0.85rem; font-weight: 600;">⚽ ${awayTeamInfo.name}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- REGISTRO DE RESULTADO -->
+      <div style="background: rgba(0, 212, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid rgba(0, 212, 255, 0.15);">
+        <p style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; text-transform: uppercase; font-weight: 600;">⚽ Resultado da Partida</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;">
+          <!-- GOLS CASA -->
+          <div style="text-align: center;">
+            <label style="display: block; color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 8px; text-transform: uppercase; font-weight: 600;">Gols Casa</label>
+            <input type="number" id="homeGoalsInput" placeholder="0" min="0" max="99" style="width: 80px; text-align: center; font-size: 1.8rem; font-weight: bold; padding: 12px; border: 2px solid var(--accent); background: rgba(0, 212, 255, 0.15); border-radius: 8px;">
+          </div>
+
+          <!-- VERSUS -->
+          <div style="text-align: center; padding-top: 28px;">
+            <p style="color: var(--accent); font-size: 1.4rem; font-weight: bold; margin: 0;">×</p>
+          </div>
+
+          <!-- GOLS FORA -->
+          <div style="text-align: center;">
+            <label style="display: block; color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 8px; text-transform: uppercase; font-weight: 600;">Gols Fora</label>
+            <input type="number" id="awayGoalsInput" placeholder="0" min="0" max="99" style="width: 80px; text-align: center; font-size: 1.8rem; font-weight: bold; padding: 12px; border: 2px solid var(--accent); background: rgba(0, 212, 255, 0.15); border-radius: 8px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- INSTRUÇÕES -->
+      <div style="background: rgba(46, 213, 115, 0.1); padding: 12px; border-radius: 10px; border-left: 3px solid var(--success); margin-bottom: 20px;">
+        <p style="margin: 0; color: var(--success); font-size: 0.85rem;">
+          💡 Jogue a partida no FIFA, digite os gols e clique em "Confirmar Resultado"
+        </p>
+      </div>
+
+      <!-- BOTÕES DE AÇÃO -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <button onclick="saveTournamentMatch('${tournamentId}')" class="btn-primary">
+          ✅ Confirmar Resultado
+        </button>
+        <button onclick="pauseTournamentMatch()" class="btn-secondary">
+          ⏸️ Pausar
+        </button>
+      </div>
+    `;
+
+    modalContent.innerHTML = html;
+    modal.style.display = "flex";
+  } catch (error) {
+    console.error("❌ Erro ao abrir partidas:", error);
+    showError("Erro ao abrir partidas");
+  }
+};
+window.saveTournamentMatch = async function(tournamentId) {
+  try {
+    const homeGoals = parseInt(document.getElementById("homeGoalsInput").value);
+    const awayGoals = parseInt(document.getElementById("awayGoalsInput").value);
+
+    if (isNaN(homeGoals) || isNaN(awayGoals)) {
+      showError("Preencha os gols!");
+      return;
+    }
+
+    // Atualizar partida
+    currentMatch.homeGoals = homeGoals;
+    currentMatch.awayGoals = awayGoals;
+    currentMatch.status = "finished";
+
+    // Atualizar no Firestore
+    await updateDoc(doc(db, "tournaments", tournamentId), {
+      matches: currentGroupMatches
+    });
+
+    showToast("✅ Resultado salvo!");
+    
+    // Próxima partida
+    setTimeout(() => {
+      openGroupMatches(tournamentId);
+    }, 1000);
+
+  } catch (error) {
+    console.error("❌ Erro ao salvar partida:", error);
+    showError("Erro ao salvar partida");
+  }
+};
+
+window.pauseTournamentMatch = function() {
+  closeTournamentView();
+  showToast("⏸️ Torneio pausado. Você pode voltar depois.");
+};
+
+window.closeTournamentView = function() {
+  document.getElementById("userProfileModal").style.display = "none";
+  currentTournament = null;
+  currentMatch = null;
+};
+
+function updateBrowseTournaments() {
+  const list = document.getElementById("allTournamentsList");
+  const availableTournaments = tournaments.filter(t => 
+    !t.participants?.includes(currentUser.uid) && t.createdBy !== currentUser.uid
+  );
+
+  if (availableTournaments.length === 0) {
+    list.innerHTML = '<p class="empty-state">Nenhum torneio disponível</p>';
+    return;
+  }
+
+  list.innerHTML = availableTournaments.map(tournament => {
+    return `
+      <div class="card tournament-card">
+        <div class="tournament-status ${tournament.status}">${tournament.status === "created" ? "⏳ Aberto" : tournament.status === "started" ? "🎮 Em Andamento" : "✅ Finalizado"}</div>
+        <h3>🏅 ${tournament.name}</h3>
+        
+        <div class="tournament-info">
+          <p>👥 <strong>Times:</strong> ${tournament.teamsCount}</p>
+          <p>📍 <strong>Formato:</strong> ${tournament.format === "groups" ? "Grupos" : "Eliminatória"}</p>
+          <p>👤 <strong>Participantes:</strong> ${tournament.participants?.length || 0}</p>
+          ${tournament.description ? `<p>📝 ${tournament.description}</p>` : ''}
+        </div>
+
+        <div class="tournament-actions">
+          <button onclick="openTournamentView('${tournament.id}')" class="btn-view">👁️ Ver Detalhes</button>
+          ${tournament.status === "created" ? `
+            <button onclick="joinTournament('${tournament.id}')" class="btn-primary">✅ Entrar</button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function updateMyTournaments() {
+  const list = document.getElementById("myTournamentsList");
+  const myTournaments = tournaments.filter(t => 
+    t.createdBy === currentUser.uid || t.participants?.includes(currentUser.uid)
+  );
+
+  if (myTournaments.length === 0) {
+    list.innerHTML = '<p class="empty-state">Você não está em nenhum torneio</p>';
+    return;
+  }
+
+  list.innerHTML = myTournaments.map(tournament => {
+    const isCreator = tournament.createdBy === currentUser.uid;
+
+    return `
+      <div class="card tournament-card">
+        <div class="tournament-status ${tournament.status}">${tournament.status === "created" ? "⏳ Criado" : tournament.status === "started" ? "🎮 Em Andamento" : "✅ Finalizado"}</div>
+        <h3>🏅 ${tournament.name}</h3>
+        
+        <div class="tournament-info">
+          <p>👥 <strong>Times:</strong> ${tournament.teamsCount}</p>
+          <p>📍 <strong>Formato:</strong> ${tournament.format === "groups" ? "Grupos" : "Eliminatória"}</p>
+          <p>👤 <strong>Participantes:</strong> ${tournament.participants?.length || 0}</p>
+          ${isCreator ? `<p style="color: var(--accent);">👑 Você é o criador</p>` : ''}
+          ${tournament.description ? `<p>📝 ${tournament.description}</p>` : ''}
+        </div>
+
+        <div class="tournament-actions">
+          <button onclick="openTournamentView('${tournament.id}')" class="btn-view">👁️ Ver Detalhes</button>
+          ${tournament.status === "started" && tournament.participants?.includes(currentUser.uid) ? `
+            <button onclick="openGroupMatches('${tournament.id}')" class="btn-primary">⚽ Jogar</button>
+          ` : ''}
+          ${isCreator && tournament.status === "created" ? `
+            <button onclick="startTournament('${tournament.id}')" class="btn-draw">🎮 Começar</button>
+          ` : ''}
+          ${isCreator ? `
+            <button onclick="deleteTournament('${tournament.id}')" class="btn-delete-tournament">🗑️ Deletar</button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function updateTournamentsUI() {
+  updateBrowseTournaments();
+  updateMyTournaments();
+}
 
 window.deleteTournament = async function(tournamentId) {
   if (!confirm("Deseja realmente deletar este torneio?")) return;
@@ -1444,134 +2016,13 @@ window.deleteTournament = async function(tournamentId) {
   try {
     await deleteDoc(doc(db, "tournaments", tournamentId));
     showToast("🗑️ Torneio deletado!");
+    closeTournamentView();
     loadTournaments();
   } catch (error) {
     console.error("❌ Erro ao deletar torneio:", error);
     showError("Erro ao deletar torneio");
   }
 };
-
-window.openDrawModal = async function(tournamentId) {
-  try {
-    const tournament = tournaments.find(t => t.id === tournamentId);
-    const selectedLeagueIds = tournament.selectedLeagues.map(l => l.id);
-    const availableTeams = teams.filter(t => selectedLeagueIds.includes(t.leagueId));
-
-    if (availableTeams.length < tournament.teamsCount) {
-      showError(`Esta liga não tem ${tournament.teamsCount} times!`);
-      return;
-    }
-
-    currentModalUserId = tournamentId;
-
-    const modal = document.getElementById("userProfileModal");
-    const modalContent = modal.querySelector(".modal-content");
-
-    const drawHtml = `
-      <button class="modal-close" onclick="closeDrawModal()">✕</button>
-      <h2 style="text-align: center; margin-bottom: 20px; color: var(--accent);">🎲 Sorteio: ${tournament.name}</h2>
-      
-      <div class="draw-teams-container">
-        ${availableTeams.slice(0, tournament.teamsCount).map(team => `
-          <div class="draw-team-item">
-            <h4>⚽ ${team.name}</h4>
-            <p>${team.leagueName}</p>
-          </div>
-        `).join('')}
-      </div>
-
-      <button class="draw-spin-button" onclick="performDraw('${tournamentId}', ${tournament.teamsCount})">
-        🎯 REALIZAR SORTEIO
-      </button>
-    `;
-
-    modalContent.innerHTML = drawHtml;
-    modal.style.display = "flex";
-  } catch (error) {
-    console.error("❌ Erro ao abrir sorteio:", error);
-    showError("Erro ao abrir sorteio");
-  }
-};
-
-window.performDraw = async function(tournamentId, teamsCount) {
-  try {
-    const tournament = tournaments.find(t => t.id === tournamentId);
-    const selectedLeagueIds = tournament.selectedLeagues.map(l => l.id);
-    const leagueTeams = teams.filter(t => selectedLeagueIds.includes(t.leagueId));
-    
-    const shuffled = [...leagueTeams.slice(0, teamsCount)].sort(() => Math.random() - 0.5);
-    
-    const brackets = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
-      if (i + 1 < shuffled.length) {
-        brackets.push({
-          team1: shuffled[i].name,
-          team2: shuffled[i + 1].name,
-          round: 1,
-          result: null
-        });
-      }
-    }
-
-    await updateDoc(doc(db, "tournaments", tournamentId), {
-      selectedTeams: shuffled.map(t => t.id),
-      brackets: brackets,
-      status: "in_progress"
-    });
-
-    showToast("🎲 Sorteio realizado com sucesso!");
-    loadTournaments();
-    closeDrawModal();
-  } catch (error) {
-    console.error("❌ Erro ao realizar sorteio:", error);
-    showError("Erro ao realizar sorteio");
-  }
-};
-
-window.closeDrawModal = function() {
-  document.getElementById("userProfileModal").style.display = "none";
-  currentModalUserId = null;
-};
-
-function updateTournamentsUI() {
-  const list = document.getElementById("tournamentsList");
-
-  if (tournaments.length === 0) {
-    list.innerHTML = '<p class="empty-state">Nenhum torneio criado ainda</p>';
-    return;
-  }
-
-  list.innerHTML = tournaments.map(tournament => {
-    const statusText = {
-      "pending": "⏳ Pendente",
-      "in_progress": "🎮 Em Andamento",
-      "finished": "✅ Finalizado"
-    };
-
-    const leaguesText = tournament.selectedLeagues?.map(l => l.name).join(", ") || "Ligas";
-
-    return `
-      <div class="card tournament-card">
-        <div class="tournament-status ${tournament.status}">${statusText[tournament.status]}</div>
-        <h3>🏅 ${tournament.name}</h3>
-        
-        <div class="tournament-info">
-          <p>📍 <strong>Ligas:</strong> ${leaguesText}</p>
-          <p>👥 <strong>Times:</strong> ${tournament.selectedTeams?.length || 0}/${tournament.teamsCount}</p>
-          ${tournament.description ? `<p>📝 ${tournament.description}</p>` : ''}
-        </div>
-
-        <div class="tournament-actions">
-          ${tournament.status === "pending" ? `
-            <button onclick="openDrawModal('${tournament.id}')" class="btn-draw">🎲 Realizar Sorteio</button>
-          ` : ''}
-          <button onclick="deleteTournament('${tournament.id}')" class="btn-delete-tournament">🗑️ Deletar</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-}
-
 // ===== ESTATÍSTICAS AVANÇADAS =====
 window.getTeamStats = function(teamId) {
   const team = teams.find(t => t.id === teamId);
@@ -2061,5 +2512,171 @@ document.addEventListener('DOMContentLoaded', () => {
     updateLeagueSelects();
   }, 1000);
 });
+  // Inicializar abas de torneios
+  const tabCreate = document.getElementById("tabCreate");
+  if (tabCreate) {
+    tabCreate.classList.add("active");
+  }
 
+  // Event listeners para torneios
+  const tournamentMaxTeams = document.getElementById("tournamentMaxTeamsCount");
+  if (tournamentMaxTeams) {
+    tournamentMaxTeams.addEventListener('change', updateGroupsInfo);
+  }
+
+  // Carregar torneios quando a aba for aberta
+  const originalShowSection = window.showSection;
+  window.showSection = function(sectionId, event) {
+    originalShowSection.call(this, sectionId, event);
+    if (sectionId === 'tournaments') {
+      loadTournaments();
+      showTournamentTab('myTournaments');
+    }
+  };
+// Função para criar grupos com suporte a adversários
+function createGroupsWithOpponents(teamsList, numGroups) {
+  const groups = {};
+  
+  // Embaralhar times
+  const shuffled = [...teamsList].sort(() => Math.random() - 0.5);
+  
+  // Distribuir em grupos
+  for (let i = 0; i < numGroups; i++) {
+    groups[`Grupo ${String.fromCharCode(65 + i)}`] = [];
+  }
+  
+  shuffled.forEach((team, index) => {
+    const groupIndex = index % numGroups;
+    const groupKey = `Grupo ${String.fromCharCode(65 + groupIndex)}`;
+    groups[groupKey].push(team);
+  });
+
+  return groups;
+}
+
+// Função para criar partidas de grupo com adversários
+function createGroupMatchesWithOpponents(groupTeams) {
+  const matches = [];
+  
+  for (let i = 0; i < groupTeams.length; i++) {
+    for (let j = i + 1; j < groupTeams.length; j++) {
+      matches.push({
+        homeTeam: groupTeams[i],
+        awayTeam: groupTeams[j],
+        homeGoals: null,
+        awayGoals: null,
+        status: "pending"
+      });
+    }
+  }
+  
+  return matches;
+}
+// ===== GERENCIAMENTO DE ADVERSÁRIOS NO TORNEIO =====
+let tournamentAdversaries = [];
+
+window.addAdvesaryToTournament = function() {
+  const input = document.getElementById("adversaryInput");
+  const name = input.value.trim();
+
+  if (!name) {
+    showError("Digite um nome para o adversário!");
+    return;
+  }
+
+  if (name.length < 2) {
+    showError("Nome muito curto!");
+    return;
+  }
+
+  // Verificar duplicatas
+  if (tournamentAdversaries.some(a => a.name.toLowerCase() === name.toLowerCase())) {
+    showError("Este adversário já foi adicionado!");
+    return;
+  }
+
+  // Adicionar adversário
+  const adversary = {
+    id: `adv_${Date.now()}_${Math.random()}`,
+    name: name,
+    addedAt: new Date().toISOString()
+  };
+
+  tournamentAdversaries.push(adversary);
+  input.value = "";
+  
+  updateAdversaryList();
+  showToast(`✅ Adversário "${name}" adicionado!`);
+};
+
+window.removeAdversaryFromTournament = function(adversaryId) {
+  tournamentAdversaries = tournamentAdversaries.filter(a => a.id !== adversaryId);
+  updateAdversaryList();
+  showToast("❌ Adversário removido!");
+};
+
+function updateAdversaryList() {
+  const list = document.getElementById("adversaryList");
+  const count = document.getElementById("adversaryCount");
+
+  if (tournamentAdversaries.length === 0) {
+    list.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 12px;">Nenhum adversário adicionado</p>';
+    count.innerText = "Adversários: 0";
+    return;
+  }
+
+  list.innerHTML = tournamentAdversaries.map(adversary => `
+    <div style="background: rgba(0, 212, 255, 0.1); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.2); display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <p style="margin: 0; color: var(--text); font-weight: 600;">⚔️ ${adversary.name}</p>
+        <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 0.8rem;">ID: ${adversary.id.substring(0, 8)}...</p>
+      </div>
+      <button onclick="removeAdversaryFromTournament('${adversary.id}')" class="btn-delete" style="padding: 6px 12px;">🗑️</button>
+    </div>
+  `).join("");
+
+  count.innerText = `Adversários: ${tournamentAdversaries.length}`;
+}
+
+// Resetar lista de adversários ao criar torneio
+window.resetAdversaryList = function() {
+  tournamentAdversaries = [];
+  updateAdversaryList();
+};
+// Criar grupos com adversários
+function createGroupsWithAdversaries(teamsList, numGroups) {
+  const groups = {};
+  const shuffled = [...teamsList].sort(() => Math.random() - 0.5);
+  
+  for (let i = 0; i < numGroups; i++) {
+    groups[`Grupo ${String.fromCharCode(65 + i)}`] = [];
+  }
+  
+  shuffled.forEach((team, index) => {
+    const groupIndex = index % numGroups;
+    const groupKey = `Grupo ${String.fromCharCode(65 + groupIndex)}`;
+    groups[groupKey].push(team);
+  });
+
+  return groups;
+}
+
+// Criar partidas de grupo com adversários
+function createGroupMatchesWithAdversaries(groupTeams) {
+  const matches = [];
+  
+  for (let i = 0; i < groupTeams.length; i++) {
+    for (let j = i + 1; j < groupTeams.length; j++) {
+      matches.push({
+        homeTeam: groupTeams[i],
+        awayTeam: groupTeams[j],
+        homeGoals: null,
+        awayGoals: null,
+        status: "pending"
+      });
+    }
+  }
+  
+  return matches;
+}
 console.log("✅ app.js carregado com sucesso!");

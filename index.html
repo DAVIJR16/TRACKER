@@ -178,15 +178,24 @@
             <div class="match-section">
               <h4 style="margin-bottom: 16px; color: var(--text);">🏃 Time do Adversário (Fora)</h4>
               
-              <!-- Seleção de Adversário -->
-              <div class="match-team-grid">
-                <div style="grid-column: 1 / -1;">
-                  <label>Selecione o Adversário</label>
-                  <select id="opponentAwaySelect" onchange="updateAwayTeamsUI()">
-                    <option value="">Escolha um adversário</option>
-                  </select>
-                </div>
-              </div>
+             <!-- Seleção de Adversários para o Torneio -->
+<div style="margin: 20px 0; padding: 16px; background: rgba(0, 212, 255, 0.05); border-radius: 12px; border: 1px solid rgba(0, 212, 255, 0.15);">
+  <label style="display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+    Adicionar Adversários 🎮
+  </label>
+  
+  <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 12px;">
+    <input type="text" id="adversaryInput" placeholder="Digite o nome do adversário" maxlength="50">
+    <button onclick="addAdvesaryToTournament()" class="btn-primary" style="width: auto; padding: 14px 20px;">➕ Adicionar</button>
+  </div>
+
+  <!-- Lista de adversários adicionados -->
+  <div id="adversaryList" style="display: grid; gap: 8px;">
+    <!-- Preenchido dinamicamente -->
+  </div>
+  
+  <p id="adversaryCount" style="margin-top: 12px; color: var(--accent); font-weight: 600;">Adversários: 0</p>
+</div>
 
               <!-- Liga e Time do Adversário -->
               <div class="match-team-grid" style="margin-top: 16px;">
@@ -273,53 +282,81 @@
           <div id="rankingTable" class="ranking-table"></div>
         </section>
 
-        <!-- Torneios -->
-        <section id="tournaments" class="section">
-          <h2>🏅 Torneios</h2>
-          <div class="card form-card">
-            <h3 style="margin-bottom: 20px; text-align: center;">➕ Criar Novo Torneio</h3>
-            <input type="text" id="tournamentName" placeholder="Nome do Torneio" maxlength="50">
-            
-            <!-- Seleção de Múltiplas Ligas -->
-            <div style="margin: 20px 0;">
-              <label style="display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Selecione as Ligas 🎯</label>
-              <div id="tournamentLeaguesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                <!-- Preenchido dinamicamente -->
-              </div>
-              <p id="tournamentTeamsCount" style="margin-top: 12px; color: var(--accent); font-weight: 600;">Times disponíveis: 0</p>
-            </div>
-            
-            <div class="tournament-config-grid">
-              <div>
-                <label>📊 Formato</label>
-                <select id="tournamentFormat">
-                  <option value="single">Eliminatória Simples</option>
-                  <option value="double">Eliminatória Dupla</option>
-                  <option value="roundrobin">Todos x Todos</option>
-                </select>
-              </div>
-              <div>
-                <label>🔄 Sistema</label>
-                <select id="tournamentSystem">
-                  <option value="single">Ida</option>
-                  <option value="double">Ida e Volta</option>
-                </select>
-              </div>
-              <div>
-                <label>🎲 Qtde Times</label>
-                <input type="number" id="tournamentMaxTeamsCount" placeholder="4" min="2" max="32" value="4">
-              </div>
-            </div>
-            
-            <div class="tournament-description">
-              <label>📝 Descrição (Opcional)</label>
-              <textarea id="tournamentDescription" placeholder="Descreva seu torneio..." maxlength="200"></textarea>
-            </div>
-            
-            <button onclick="createTournament()" class="btn-primary">🎯 Criar Torneio</button>
-          </div>
-          <div id="tournamentsList" class="tournaments-list"></div>
-        </section>
+<!-- Torneios -->
+<section id="tournaments" class="section">
+  <h2>🏅 Torneios</h2>
+  
+  <!-- ABAS DE TORNEIOS -->
+  <div style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+    <button onclick="showTournamentTab('create')" class="btn-secondary" id="tabCreate">➕ Criar Torneio</button>
+    <button onclick="showTournamentTab('browse')" class="btn-secondary" id="tabBrowse">🔍 Explorar</button>
+    <button onclick="showTournamentTab('myTournaments')" class="btn-secondary" id="tabMyTournaments">🏆 Meus Torneios</button>
+  </div>
+
+  <!-- ABA: CRIAR TORNEIO -->
+  <div id="createTournamentTab" style="display: block;">
+    <div class="card form-card">
+      <h3 style="margin-bottom: 20px; text-align: center;">➕ Criar Novo Torneio</h3>
+      <input type="text" id="tournamentName" placeholder="Nome do Torneio" maxlength="50">
+      
+      <!-- Seleção de Múltiplas Ligas -->
+      <div style="margin: 20px 0;">
+        <label style="display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Selecione as Ligas 🎯</label>
+        <div id="tournamentLeaguesContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+          <!-- Preenchido dinamicamente -->
+        </div>
+        <p id="tournamentTeamsCount" style="margin-top: 12px; color: var(--accent); font-weight: 600;">Times disponíveis: 0</p>
+      </div>
+
+      <!-- Seleção de Adversários para o Torneio -->
+      <div style="margin: 20px 0; padding: 16px; background: rgba(0, 212, 255, 0.05); border-radius: 12px; border: 1px solid rgba(0, 212, 255, 0.15);">
+        <label style="display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+          Selecione Adversários 🎮
+        </label>
+        <select id="tournamentOpponents" multiple style="width: 100%; height: 120px; padding: 10px;">
+          <!-- Preenchido dinamicamente -->
+        </select>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">Segure CTRL/CMD para selecionar múltiplos adversários</p>
+      </div>
+      
+      <div class="tournament-config-grid">
+        <div>
+          <label>📊 Formato</label>
+          <select id="tournamentFormat" onchange="updateGroupsInfo()">
+            <option value="groups">Grupos (Como Copa do Mundo)</option>
+            <option value="single">Eliminatória Simples</option>
+            <option value="double">Eliminatória Dupla</option>
+          </select>
+        </div>
+        <div>
+          <label>👥 Qtde Times</label>
+          <input type="number" id="tournamentMaxTeamsCount" placeholder="8" min="2" max="64" value="8">
+        </div>
+        <div id="groupsConfig" style="grid-column: 1 / -1;">
+          <label>📍 Grupos (Automático)</label>
+          <input type="text" id="groupsInfo" placeholder="4 grupos com 2 times cada" readonly style="background: rgba(0, 212, 255, 0.1);">
+        </div>
+      </div>
+      
+      <div class="tournament-description">
+        <label>📝 Descrição (Opcional)</label>
+        <textarea id="tournamentDescription" placeholder="Descreva seu torneio..." maxlength="200"></textarea>
+      </div>
+      
+      <button onclick="createTournament()" class="btn-primary" style="width: 100%;">🎯 Criar Torneio</button>
+    </div>
+  </div>
+
+  <!-- ABA: EXPLORAR TORNEIOS -->
+  <div id="browseTournamentsTab" style="display: none;">
+    <div id="allTournamentsList" class="tournaments-list"></div>
+  </div>
+
+  <!-- ABA: MEUS TORNEIOS -->
+  <div id="myTournamentsTab" style="display: none;">
+    <div id="myTournamentsList" class="tournaments-list"></div>
+  </div>
+</section>
 
         <!-- Usuários -->
         <section id="users" class="section">
